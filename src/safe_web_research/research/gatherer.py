@@ -19,6 +19,7 @@ from safe_web_research.fetch import (
     FetchPolicyError,
 )
 from safe_web_research.research.budget import BudgetTracker
+from safe_web_research.research.evidence_selection import EvidenceSelector
 from safe_web_research.research.stopping import StoppingPolicy
 from safe_web_research.search import (
     SearchProvider,
@@ -37,12 +38,14 @@ class EvidenceGatherer:
         extractor: Extractor,
         *,
         stopping_policy: StoppingPolicy | None = None,
+        evidence_selector: EvidenceSelector | None = None,
         content_scanner: SuspiciousContentScanner | None = None,
     ) -> None:
         self._search_provider = search_provider
         self._fetcher = fetcher
         self._extractor = extractor
         self._stopping_policy = stopping_policy or StoppingPolicy()
+        self._evidence_selector = evidence_selector or EvidenceSelector()
         self._content_scanner = content_scanner or SuspiciousContentScanner()
 
     async def gather(
@@ -132,6 +135,7 @@ class EvidenceGatherer:
 
             new_evidence = 0
             stop_for_budget = False
+            stop_for_sufficiency = False
 
             for result in results:
                 url_key = str(result.url)
@@ -226,7 +230,17 @@ class EvidenceGatherer:
 
                 new_evidence += len(extracted.chunks)
 
-            if stop_for_budget:
+                selection = self._evidence_selector.select(
+                    question=request.question,
+                    queries=issued_queries,
+                    sources=sources,
+                    evidence=evidence,
+                )
+                if selection.sufficient:
+                    stop_for_sufficiency = True
+                    break
+
+            if stop_for_budget or stop_for_sufficiency:
                 break
 
             if new_evidence == 0:
@@ -241,10 +255,17 @@ class EvidenceGatherer:
                 )
                 break
 
-        return EvidenceBundle(
+        selection = self._evidence_selector.select(
+            question=request.question,
             queries=issued_queries,
             sources=sources,
             evidence=evidence,
+        )
+
+        return EvidenceBundle(
+            queries=issued_queries,
+            sources=list(selection.sources),
+            evidence=list(selection.evidence),
             security_events=security_events,
             usage=tracker.usage(),
             incomplete_reasons=incomplete_reasons,

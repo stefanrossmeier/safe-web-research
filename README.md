@@ -259,7 +259,13 @@ uv run safe-web-research research \
 
 See [CLI documentation](docs/cli.md) for filters and budget controls.
 
-The default research budget is intentionally generous and acts as a circuit breaker rather than a recipe for how much work every request should perform. Fetch attempts are tracked separately from successfully fetched pages, so blocked, unsupported, or failed responses do not consume the successful-page budget. The default limits can be lowered per request, while model validation still enforces absolute upper bounds. If gathered evidence exceeds the synthesis context cap, the result reports `evidence_truncated_for_synthesis`.
+The default research budget is intentionally generous and acts as a circuit breaker rather than a recipe for how much work every request should perform. Fetch attempts are tracked separately from successfully fetched pages, so blocked, unsupported, or failed responses do not consume the successful-page budget. The default limits can be lowered per request, while model validation still enforces absolute upper bounds.
+
+Normal research now uses a deterministic evidence selector as a **soft stopping layer** below those hard ceilings. It ranks chunks by lexical relevance to the question/planner queries, preserves source diversity, limits per-source dominance, and stops gathering once a sufficiently broad and relevant evidence set has accumulated. No extra LLM call is used for selection. Broad or poorly matched research can continue toward the hard budget instead of being forced to stop at a fixed small page count.
+
+The selector retains at most 200,000 characters for synthesis by default, leaving headroom below the synthesizer's 400,000-character safety cap. If evidence still exceeds the synthesis cap, the result reports `evidence_truncated_for_synthesis` rather than silently implying that every gathered chunk was considered.
+
+`SafeFetcher` accepts identity and gzip responses. Gzip is decompressed incrementally with the same per-page bound enforced against the **decompressed** body, while the compressed stream is bounded as well. Unsupported encodings continue to fail closed.
 
 ## Python example
 
@@ -357,7 +363,14 @@ uv run python scripts/research_smoke.py
 
 Broad real research commands can consume substantially more pages and LLM context than the smoke profile, so they are treated as demos/benchmarks rather than routine repository health checks.
 
-See [Testing Strategy](docs/testing.md) for the test hierarchy and [Recorded test runs](reports/test-runs/README.md) for publication-ready statistics.
+M15 also adds a paid live **research-quality matrix** across several unrelated documentation domains. It records semantic-verification coverage, hard-limit hits, pages, tokens, latency, and provider cost. The current low-cost validation example uses GLM 5.3 Flash:
+
+```bash
+uv run python -m benchmarks.run_research_quality \
+  --model z-ai/glm-5.3-flash
+```
+
+See [Testing Strategy](docs/testing.md), [M15 research-quality methodology](benchmarks/research-quality/README.md), and [Recorded test runs](reports/test-runs/README.md).
 
 ## Result model
 

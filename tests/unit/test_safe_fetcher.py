@@ -1,3 +1,5 @@
+import gzip
+
 import httpx
 import pytest
 
@@ -89,7 +91,7 @@ async def test_fetcher_connects_to_validated_ip_and_preserves_host_and_sni() -> 
 
     assert outbound.headers["Host"] == "example.com"
 
-    assert outbound.headers["Accept-Encoding"] == "identity"
+    assert outbound.headers["Accept-Encoding"] == "gzip, identity"
 
     assert outbound.headers["Connection"] == "close"
 
@@ -388,7 +390,10 @@ async def test_fetcher_rejects_missing_content_type() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fetcher_rejects_content_encoding() -> None:
+async def test_fetcher_safely_decompresses_gzip_with_decompressed_limit() -> None:
+    body = b"Python documentation " * 20
+    compressed = gzip.compress(body)
+
     async def handler(
         request: httpx.Request,
     ) -> httpx.Response:
@@ -397,24 +402,75 @@ async def test_fetcher_rejects_content_encoding() -> None:
             headers={
                 "Content-Type": "text/html",
                 "Content-Encoding": "gzip",
+                "Content-Length": str(len(compressed)),
+            },
+            body=compressed,
+        )
+
+    resolver = FakeDNSResolver({"example.com": ["1.1.1.1"]})
+    fetcher = _fetcher(resolver, httpx.MockTransport(handler))
+
+    document = await fetcher.fetch(
+        FetchRequest(
+            url="https://example.com/",
+            max_bytes=len(body),
+        )
+    )
+
+    assert document.body == body
+
+
+@pytest.mark.asyncio
+async def test_fetcher_rejects_gzip_decompression_bomb_over_limit() -> None:
+    compressed = gzip.compress(b"A" * 10_000)
+
+    async def handler(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        return _response(
+            200,
+            headers={
+                "Content-Type": "text/plain",
+                "Content-Encoding": "gzip",
+            },
+            body=compressed,
+        )
+
+    resolver = FakeDNSResolver({"example.com": ["1.1.1.1"]})
+    fetcher = _fetcher(resolver, httpx.MockTransport(handler))
+
+    with pytest.raises(
+        FetchSizeLimitError,
+        match="Decompressed response body exceeds",
+    ):
+        await fetcher.fetch(
+            FetchRequest(
+                url="https://example.com/",
+                max_bytes=1_000,
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_fetcher_rejects_unsupported_content_encoding() -> None:
+    async def handler(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        return _response(
+            200,
+            headers={
+                "Content-Type": "text/html",
+                "Content-Encoding": "br",
             },
             body=b"compressed",
         )
 
-    resolver = FakeDNSResolver(
-        {
-            "example.com": ["1.1.1.1"],
-        }
-    )
-
-    fetcher = _fetcher(
-        resolver,
-        httpx.MockTransport(handler),
-    )
+    resolver = FakeDNSResolver({"example.com": ["1.1.1.1"]})
+    fetcher = _fetcher(resolver, httpx.MockTransport(handler))
 
     with pytest.raises(
         FetchContentEncodingError,
-        match="gzip",
+        match="br",
     ):
         await fetcher.fetch(FetchRequest(url="https://example.com/"))
 
@@ -591,5 +647,57 @@ async def test_fetcher_maps_connection_failure() -> None:
     with pytest.raises(
         FetchConnectionError,
         match="Failed connecting",
+    ):
+        await fetcher.fetch(FetchRequest(url="https://example.com/"))
+
+
+@pytest.mark.asyncio
+async def test_fetcher_rejects_truncated_gzip_body() -> None:
+    compressed = gzip.compress(b"bounded content")[:-4]
+
+    async def handler(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        return _response(
+            200,
+            headers={
+                "Content-Type": "text/plain",
+                "Content-Encoding": "gzip",
+            },
+            body=compressed,
+        )
+
+    resolver = FakeDNSResolver({"example.com": ["1.1.1.1"]})
+    fetcher = _fetcher(resolver, httpx.MockTransport(handler))
+
+    with pytest.raises(
+        FetchContentEncodingError,
+        match="Truncated gzip",
+    ):
+        await fetcher.fetch(FetchRequest(url="https://example.com/"))
+
+
+@pytest.mark.asyncio
+async def test_fetcher_rejects_concatenated_gzip_members() -> None:
+    compressed = gzip.compress(b"first") + gzip.compress(b"second")
+
+    async def handler(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        return _response(
+            200,
+            headers={
+                "Content-Type": "text/plain",
+                "Content-Encoding": "gzip",
+            },
+            body=compressed,
+        )
+
+    resolver = FakeDNSResolver({"example.com": ["1.1.1.1"]})
+    fetcher = _fetcher(resolver, httpx.MockTransport(handler))
+
+    with pytest.raises(
+        FetchContentEncodingError,
+        match="Concatenated gzip",
     ):
         await fetcher.fetch(FetchRequest(url="https://example.com/"))

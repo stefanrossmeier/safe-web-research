@@ -154,10 +154,12 @@ V1 does not provide:
 - maximum searches,
 - separate maximum fetch attempts and successfully fetched pages,
 - per-page and total byte caps,
+- gzip decompression with bounded compressed and decompressed streams,
 - redirect caps,
 - model-call caps,
 - output-token caps,
 - tracked input-token usage,
+- deterministic soft evidence selection/sufficiency stopping,
 - stopping after repeated no-evidence queries.
 
 **Residual risk:** Provider-side token accounting is reported after a call, so an input-token budget cannot be perfectly pre-enforced without a model-specific tokenizer.

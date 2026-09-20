@@ -135,7 +135,22 @@ Trusted code validates the returned plan and applies search budgets.
 - deduplicates URLs and content,
 - records provider/fetch/extraction/security events,
 - preserves source/evidence provenance,
-- stops when budgets or configured stopping conditions are reached.
+- ranks evidence deterministically for relevance and source diversity,
+- stops early when the selected evidence set is sufficient,
+- otherwise continues until budgets or other configured stopping conditions are reached.
+
+
+### Evidence selection and soft stopping
+
+Hard resource budgets remain the security circuit breakers. A separate deterministic `EvidenceSelector` controls normal research shape without changing those ceilings. It scores evidence using terms from the caller question and planner queries, prefers source diversity, limits the number of retained chunks from one source, and keeps a bounded selected evidence set.
+
+After each newly extracted source, trusted orchestration evaluates whether the selected set has enough source diversity, relevant chunks, text volume, and question-term coverage to be useful. If so, gathering stops normally without an incompleteness flag. If not, research continues toward the hard budget. This is intentionally heuristic and does not claim semantic completeness; it avoids another LLM call and is allowed to be conservative.
+
+Only selected evidence is passed forward to synthesis and semantic verification. Fetch/security events and resource usage still reflect all work performed before stopping.
+
+### HTTP compression
+
+`SafeFetcher` requests `gzip` or identity content and handles gzip itself from the raw response stream. Both compressed bytes and the incrementally decompressed body are bounded, and the per-page limit is enforced against decompressed content before extraction. Invalid, truncated, concatenated, or unsupported encodings fail closed. This prevents transparent client decompression from bypassing resource accounting.
 
 ### Synthesizer LLM
 

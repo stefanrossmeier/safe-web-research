@@ -81,7 +81,9 @@ The defaults are deliberately generous circuit breakers rather than a target res
 
 Verification is enabled by default and normally requires a third LLM call after planning and synthesis. Planner, synthesis, and verification still have bounded per-call completion caps, but the verifier no longer predicts its allowance from the number of synthesized claims. With the default global output budget, synthesis and verification each receive a generous bounded allowance.
 
-Synthesis accepts up to 400,000 characters of gathered evidence. If more evidence was gathered, the result includes `evidence_truncated_for_synthesis` rather than silently implying that every gathered chunk was considered.
+The generic hard budgets remain generous circuit breakers. Before synthesis, deterministic trusted code selects a smaller relevance- and diversity-oriented evidence set and can stop gathering early once that set is sufficient. The current selector retains at most 200,000 characters, while synthesis still has a separate 400,000-character safety cap. If evidence nevertheless exceeds the synthesis cap, the result includes `evidence_truncated_for_synthesis`.
+
+The fetcher accepts identity and gzip responses. Gzip is decompressed incrementally and the page-size limit applies to decompressed content; unsupported encodings fail closed.
 
 ## Exit codes
 

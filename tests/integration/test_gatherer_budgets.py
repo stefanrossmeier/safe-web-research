@@ -11,6 +11,8 @@ from safe_web_research.extraction import WebExtractor
 from safe_web_research.fetch import FakeFetcher, FetchConnectionError
 from safe_web_research.research import (
     EvidenceGatherer,
+    EvidenceSelectionPolicy,
+    EvidenceSelector,
     StoppingPolicy,
 )
 from safe_web_research.search import FakeSearchProvider
@@ -349,3 +351,62 @@ async def test_gatherer_stops_after_repeated_queries_add_no_evidence() -> None:
     ]
 
     assert "no_new_evidence" in result.incomplete_reasons
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_gatherer_stops_when_selected_evidence_is_sufficient() -> None:
+    urls = [f"https://source-{index}.example/" for index in range(1, 5)]
+    search = FakeSearchProvider(
+        {
+            "query": [
+                _result(f"result-{index}", url, index) for index, url in enumerate(urls, start=1)
+            ]
+        }
+    )
+    fetcher = FakeFetcher(
+        {
+            url: _document(
+                url,
+                (
+                    "Python 3.15 UTF-8 default encoding documentation. "
+                    "This source explains the encoding change in detail. "
+                    f"Source number {index}. "
+                ).encode()
+                * 4,
+            )
+            for index, url in enumerate(urls, start=1)
+        }
+    )
+    selector = EvidenceSelector(
+        EvidenceSelectionPolicy(
+            max_selected_chars=10_000,
+            max_chunks_per_source=2,
+            min_sources_for_sufficiency=2,
+            min_relevant_chunks_for_sufficiency=2,
+            target_selected_chars=400,
+            min_question_term_coverage=0.5,
+        )
+    )
+
+    result = await EvidenceGatherer(
+        search,
+        fetcher,
+        WebExtractor(max_chunk_chars=500),
+        evidence_selector=selector,
+    ).gather(
+        ResearchRequest(
+            question="What changed about Python 3.15 UTF-8 default encoding?",
+            budget=ResearchBudget(
+                max_searches=1,
+                max_fetch_attempts=10,
+                max_pages=10,
+            ),
+        ),
+        queries=["query"],
+    )
+
+    assert result.usage.pages_fetched == 2
+    assert result.usage.fetch_attempts == 2
+    assert len(fetcher.requests) == 2
+    assert "max_pages_reached" not in result.incomplete_reasons

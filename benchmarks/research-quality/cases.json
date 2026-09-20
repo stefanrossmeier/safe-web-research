@@ -1,0 +1,40 @@
+{
+  "version": "1",
+  "cases": [
+    {
+      "case_id": "python-315-utf8",
+      "category": "language-documentation",
+      "question": "According to the Python documentation, what changed about the default text encoding in Python 3.15 and how can the previous behavior be restored?",
+      "allowed_domains": ["python.org"],
+      "expected_terms": ["UTF-8", "PYTHONUTF8", "-X utf8"]
+    },
+    {
+      "case_id": "httpx-timeouts",
+      "category": "library-documentation",
+      "question": "According to the HTTPX documentation, what four timeout types does HTTPX distinguish and what does each one limit?",
+      "allowed_domains": ["python-httpx.org"],
+      "expected_terms": ["connect", "read", "write", "pool"]
+    },
+    {
+      "case_id": "pydantic-strict-mode",
+      "category": "library-documentation",
+      "question": "According to the Pydantic documentation, what does strict mode change compared with normal lax validation?",
+      "allowed_domains": ["docs.pydantic.dev"],
+      "expected_terms": ["strict", "coerc"]
+    },
+    {
+      "case_id": "owasp-ssrf-guidance",
+      "category": "security-guidance",
+      "question": "According to the OWASP SSRF Prevention Cheat Sheet, what are key defenses when an application is allowed to contact only known trusted destinations?",
+      "allowed_domains": ["cheatsheetseries.owasp.org"],
+      "expected_terms": ["allowlist", "domain", "IP"]
+    },
+    {
+      "case_id": "python-taskgroup",
+      "category": "api-documentation",
+      "question": "According to the Python documentation, what is asyncio.TaskGroup and what happens when a child task fails with a non-cancellation exception?",
+      "allowed_domains": ["python.org"],
+      "expected_terms": ["TaskGroup", "cancel", "ExceptionGroup"]
+    }
+  ]
+}

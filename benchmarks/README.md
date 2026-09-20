@@ -111,4 +111,4 @@ The deterministic M14 suite does not establish:
 - live-web provider latency, token usage, or cost;
 - robustness to every possible browser protocol or future tool capability.
 
-Those are separate research-quality and robustness evaluations. Keeping them separate makes the M14 security claim easier to interpret and reproduce.
+Those are separate research-quality and robustness evaluations. Keeping them separate makes the M14 security claim easier to interpret and reproduce. The paid live M15 research-quality matrix lives under [`research-quality/`](research-quality/) and records those dimensions without changing the semantics of this containment benchmark.

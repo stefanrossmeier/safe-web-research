@@ -8,6 +8,11 @@ from safe_web_research.research.errors import (
     ResearchSynthesisError,
     ResearchVerificationError,
 )
+from safe_web_research.research.evidence_selection import (
+    EvidenceSelection,
+    EvidenceSelectionPolicy,
+    EvidenceSelector,
+)
 from safe_web_research.research.gatherer import (
     EvidenceGatherer,
 )
@@ -35,6 +40,9 @@ from safe_web_research.research.verifier import (
 
 __all__ = [
     "BudgetTracker",
+    "EvidenceSelection",
+    "EvidenceSelectionPolicy",
+    "EvidenceSelector",
     "EvidenceGatherer",
     "LLMBudgetTracker",
     "PlanningOutcome",

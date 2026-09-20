@@ -161,6 +161,30 @@ uv run python scripts/research_smoke.py
 
 The live and research-smoke steps are intentionally opt-in because they use external services and may incur cost.
 
+## Live generic research-quality matrix
+
+M15 adds a separate paid live matrix for research usefulness and efficiency. It is not part of the no-cost default quality gate and it is not a replacement for the deterministic M14 security benchmark.
+
+From a clean committed revision, with credentials loaded:
+
+```bash
+uv run python -m benchmarks.run_research_quality \
+  --model z-ai/glm-5.3-flash
+```
+
+The five initial cases span Python language documentation, HTTPX, Pydantic, OWASP security guidance, and Python API documentation. Each case uses lightweight expected-term anchors plus the normal semantic verifier. The runner records:
+
+- case pass/fail,
+- expected-term coverage,
+- supported/partial/unsupported/contradicted claim counts,
+- hard-limit and truncation flags,
+- searches, fetch attempts, successful pages, and bytes,
+- input/output tokens, provider cost, and wall-clock time.
+
+A case is considered green only when it produces an answer, contains all expected anchors, verifies every claim, has no unsupported/contradicted claims, and does not hit a hard research ceiling or synthesis truncation. Partial semantic support is allowed because the verifier is expected to surface over-broad claims rather than reward blanket `supported` verdicts.
+
+The matrix is live and therefore stochastic. Use it for regression evidence and human review, not as a universal model ranking. See [`../benchmarks/research-quality/README.md`](../benchmarks/research-quality/README.md).
+
 ## Adding a security or quality regression test
 
 When a bug is discovered:

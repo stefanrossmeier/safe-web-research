@@ -1,3 +1,4 @@
+import zlib
 from collections.abc import Iterable
 from ipaddress import IPv6Address, ip_address
 
@@ -123,7 +124,7 @@ class SafeFetcher(Fetcher):
 
                     content_type = self._validate_content_type(response)
 
-                    self._validate_content_encoding(response)
+                    content_encoding = self._validate_content_encoding(response)
 
                     self._validate_declared_size(
                         response,
@@ -133,6 +134,7 @@ class SafeFetcher(Fetcher):
                     body = await self._read_bounded_body(
                         response,
                         request.max_bytes,
+                        content_encoding=content_encoding,
                     )
 
                     return FetchedDocument(
@@ -196,7 +198,7 @@ class SafeFetcher(Fetcher):
 
         headers = {
             "Accept": ("text/html, application/xhtml+xml, text/plain;q=0.9"),
-            "Accept-Encoding": "identity",
+            "Accept-Encoding": "gzip, identity",
             "Connection": "close",
             "Host": self._host_header(target.hostname),
             "User-Agent": self._user_agent,
@@ -295,11 +297,11 @@ class SafeFetcher(Fetcher):
     @staticmethod
     def _validate_content_encoding(
         response: httpx.Response,
-    ) -> None:
+    ) -> str:
         encoding = response.headers.get("Content-Encoding")
 
         if encoding is None:
-            return
+            return "identity"
 
         normalized = encoding.strip().lower()
 
@@ -307,7 +309,10 @@ class SafeFetcher(Fetcher):
             "",
             "identity",
         }:
-            return
+            return "identity"
+
+        if normalized == "gzip":
+            return "gzip"
 
         raise FetchContentEncodingError(f"Content encoding is not allowed: {normalized}")
 
@@ -331,8 +336,24 @@ class SafeFetcher(Fetcher):
                 f"Declared response size {content_length} exceeds limit {max_bytes}"
             )
 
-    @staticmethod
+    @classmethod
     async def _read_bounded_body(
+        cls,
+        response: httpx.Response,
+        max_bytes: int,
+        *,
+        content_encoding: str,
+    ) -> bytes:
+        if content_encoding == "identity":
+            return await cls._read_identity_body(response, max_bytes)
+
+        if content_encoding == "gzip":
+            return await cls._read_gzip_body(response, max_bytes)
+
+        raise FetchContentEncodingError(f"Content encoding is not allowed: {content_encoding}")
+
+    @staticmethod
+    async def _read_identity_body(
         response: httpx.Response,
         max_bytes: int,
     ) -> bytes:
@@ -343,5 +364,59 @@ class SafeFetcher(Fetcher):
                 raise FetchSizeLimitError(f"Response body exceeds limit of {max_bytes} bytes")
 
             body.extend(chunk)
+
+        return bytes(body)
+
+    @staticmethod
+    async def _read_gzip_body(
+        response: httpx.Response,
+        max_bytes: int,
+    ) -> bytes:
+        body = bytearray()
+        compressed_bytes = 0
+        decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
+
+        try:
+            async for chunk in response.aiter_raw():
+                compressed_bytes += len(chunk)
+                if compressed_bytes > max_bytes:
+                    raise FetchSizeLimitError(
+                        f"Compressed response body exceeds limit of {max_bytes} bytes"
+                    )
+
+                pending = chunk
+                while pending:
+                    remaining = max_bytes - len(body)
+                    decoded = decompressor.decompress(pending, remaining + 1)
+
+                    if len(decoded) > remaining:
+                        raise FetchSizeLimitError(
+                            f"Decompressed response body exceeds limit of {max_bytes} bytes"
+                        )
+
+                    body.extend(decoded)
+                    pending = decompressor.unconsumed_tail
+
+                    if not pending:
+                        break
+
+            remaining = max_bytes - len(body)
+            tail = decompressor.flush(remaining + 1)
+
+        except zlib.error as exc:
+            raise FetchContentEncodingError("Invalid gzip response body") from exc
+
+        if len(tail) > remaining:
+            raise FetchSizeLimitError(
+                f"Decompressed response body exceeds limit of {max_bytes} bytes"
+            )
+
+        body.extend(tail)
+
+        if not decompressor.eof:
+            raise FetchContentEncodingError("Truncated gzip response body")
+
+        if decompressor.unused_data:
+            raise FetchContentEncodingError("Concatenated gzip members are not allowed")
 
         return bytes(body)
