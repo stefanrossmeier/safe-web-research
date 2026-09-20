@@ -1,3 +1,4 @@
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import Field, field_validator
@@ -85,6 +86,54 @@ class Conflict(StrictModel):
     claim_ids: list[str] = Field(min_length=2)
 
 
+class ClaimSupport(StrEnum):
+    """Semantic support verdict for one synthesized claim."""
+
+    SUPPORTED = "supported"
+    PARTIAL = "partial"
+    UNSUPPORTED = "unsupported"
+    CONTRADICTED = "contradicted"
+
+
+class ClaimVerification(StrictModel):
+    """Independent semantic check of a claim against its cited evidence."""
+
+    claim_id: str = Field(min_length=1)
+    verdict: ClaimSupport
+    confidence: float = Field(ge=0.0, le=1.0)
+    supporting_evidence_ids: list[str]
+    explanation: str = Field(min_length=1, max_length=2_000)
+
+    @field_validator("supporting_evidence_ids")
+    @classmethod
+    def normalize_supporting_evidence_ids(
+        cls,
+        values: list[str],
+    ) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+
+        for value in values:
+            cleaned = value.strip()
+
+            if not cleaned:
+                raise ValueError("supporting evidence IDs must not be empty")
+
+            if cleaned in seen:
+                continue
+
+            seen.add(cleaned)
+            normalized.append(cleaned)
+
+        return normalized
+
+
+class VerificationDraft(StrictModel):
+    """Structured verifier output for all synthesized claims."""
+
+    verifications: list[ClaimVerification] = Field(min_length=1, max_length=100)
+
+
 class SynthesisDraft(StrictModel):
     """Structured answer draft proposed from already collected evidence."""
 
@@ -112,6 +161,8 @@ class ResearchResult(StrictModel):
     evidence: list[EvidenceChunk] = Field(default_factory=list)
 
     conflicts: list[Conflict] = Field(default_factory=list)
+
+    claim_verifications: list[ClaimVerification] = Field(default_factory=list)
 
     security_events: list[SecurityEvent] = Field(default_factory=list)
 

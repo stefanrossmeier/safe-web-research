@@ -41,6 +41,7 @@ class _OpenRouterMessage(_OpenRouterWireModel):
 
 class _OpenRouterChoice(_OpenRouterWireModel):
     message: _OpenRouterMessage
+    finish_reason: str | None = None
 
 
 class _OpenRouterUsage(_OpenRouterWireModel):
@@ -134,7 +135,8 @@ class OpenRouterLLMProvider(LLMProvider):
         if not wire.choices:
             raise LLMProviderResponseError("OpenRouter returned no completion choices")
 
-        content = wire.choices[0].message.content
+        choice = wire.choices[0]
+        content = choice.message.content
 
         if content is None:
             raise LLMProviderResponseError("OpenRouter returned no text content")
@@ -143,6 +145,7 @@ class OpenRouterLLMProvider(LLMProvider):
             self._validate_structured_output(
                 content,
                 request.response_schema,
+                finish_reason=choice.finish_reason,
             )
 
         usage = wire.usage
@@ -225,7 +228,13 @@ class OpenRouterLLMProvider(LLMProvider):
             413,
             422,
         }:
-            raise LLMProviderRequestError(f"OpenRouter rejected the request with HTTP {status}")
+            message = OpenRouterLLMProvider._request_error_message(response)
+
+            detail = f": {message}" if message is not None else ""
+
+            raise LLMProviderRequestError(
+                f"OpenRouter rejected the request with HTTP {status}{detail}"
+            )
 
         if status == 408 or 500 <= status < 600:
             raise LLMProviderUnavailableError(f"OpenRouter returned HTTP {status}")
@@ -233,14 +242,52 @@ class OpenRouterLLMProvider(LLMProvider):
         raise LLMProviderResponseError(f"Unexpected OpenRouter HTTP status {status}")
 
     @staticmethod
+    def _request_error_message(
+        response: httpx.Response,
+    ) -> str | None:
+        """Return a bounded provider error message without exposing response metadata."""
+        try:
+            payload = response.json()
+        except ValueError:
+            return None
+
+        if not isinstance(payload, dict):
+            return None
+
+        error = payload.get("error")
+
+        if not isinstance(error, dict):
+            return None
+
+        message = error.get("message")
+
+        if not isinstance(message, str):
+            return None
+
+        normalized = " ".join(message.split())
+
+        if not normalized:
+            return None
+
+        return normalized[:500]
+
+    @staticmethod
     def _validate_structured_output(
         content: str,
         schema: dict[str, object],
+        *,
+        finish_reason: str | None,
     ) -> None:
         try:
             parsed = json.loads(content)
 
         except json.JSONDecodeError as exc:
+            if finish_reason == "length":
+                raise LLMStructuredOutputError(
+                    "OpenRouter structured output was truncated because the "
+                    "completion token limit was reached"
+                ) from exc
+
             raise LLMStructuredOutputError(
                 "OpenRouter returned invalid JSON for a structured-output request"
             ) from exc

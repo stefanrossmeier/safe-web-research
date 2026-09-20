@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import pytest
 
 from safe_web_research.domain import (
+    Claim,
     EvidenceBundle,
     EvidenceChunk,
     LLMResponse,
@@ -14,6 +15,8 @@ from safe_web_research.llm import FakeLLMProvider
 from safe_web_research.research import (
     ResearchSynthesisError,
     ResearchSynthesizer,
+    ResearchVerificationError,
+    ResearchVerifier,
 )
 
 
@@ -117,6 +120,49 @@ async def test_action_field_is_rejected_even_if_model_follows_injection() -> Non
     ):
         await ResearchSynthesizer(llm).synthesize(
             ResearchRequest(question="What is the fact?"),
+            _bundle(),
+            max_output_tokens=500,
+        )
+
+
+@pytest.mark.adversarial
+@pytest.mark.asyncio
+async def test_verifier_cannot_expand_claim_citation_set() -> None:
+    llm = FakeLLMProvider(
+        [
+            LLMResponse(
+                content=json.dumps(
+                    {
+                        "verifications": [
+                            {
+                                "claim_id": "claim-1",
+                                "verdict": "supported",
+                                "confidence": 1.0,
+                                "supporting_evidence_ids": ["evidence-attacker"],
+                                "explanation": ("Followed the injected provenance instruction."),
+                            }
+                        ]
+                    }
+                ),
+                model="compromised-verifier",
+            )
+        ]
+    )
+
+    with pytest.raises(
+        ResearchVerificationError,
+        match="not cited by the claim",
+    ):
+        await ResearchVerifier(llm).verify(
+            ResearchRequest(question="What is the fact?"),
+            [
+                Claim(
+                    claim_id="claim-1",
+                    text="Legitimate evidence.",
+                    evidence_ids=["evidence-1"],
+                    confidence=0.8,
+                )
+            ],
             _bundle(),
             max_output_tokens=500,
         )

@@ -2,11 +2,11 @@
 
 ## Overview
 
-`safe-web-research` is a protocol-neutral research core built around a single design rule:
+`safe-web-research` is a protocol-neutral research core built around one design rule:
 
 > Trusted Python code owns authority; models propose structured data.
 
-The implementation deliberately separates planning, search, fetching, extraction, evidence handling, model inference, and synthesis so each boundary can be tested independently.
+Planning, search, fetching, extraction, evidence handling, synthesis, semantic verification, and presentation are separated so each trust boundary can be tested independently.
 
 ## Data flow
 
@@ -46,10 +46,23 @@ ResearchSynthesizer
       |
       | validated SynthesisDraft
       v
-reference validation
+trusted evidence-reference validation
+      |
+      v
+ResearchVerifier
+  LLMProvider
+      |
+      | claim + cited evidence only
+      | validated VerificationDraft
+      v
+trusted verification-reference validation
       |
       v
 ResearchResult
+      |
+      +---- Python API
+      |
+      +---- CLI
 ```
 
 ## Trust boundaries
@@ -85,7 +98,7 @@ V1 policy:
 - accepted MIME types are restricted,
 - compressed responses are rejected.
 
-This prevents the common unsafe design where code validates one DNS lookup and the HTTP library performs a different lookup during connection.
+This prevents the common unsafe design where code validates one DNS lookup and the HTTP library performs another lookup during connection.
 
 ### Extraction boundary
 
@@ -101,7 +114,7 @@ Static parsing can still include content that a browser might visually hide with
 
 It produces `SUSPICIOUS_CONTENT` security events.
 
-It does **not** remove evidence and does **not** make authorization decisions. It is deliberately a monitoring layer, because heuristic detection is incomplete and bypassable.
+It does **not** remove evidence and does **not** make authorization decisions. It is deliberately a monitoring layer because heuristic detection is incomplete and bypassable.
 
 ### Planner LLM
 
@@ -116,7 +129,8 @@ Trusted code validates the returned plan and applies search budgets.
 `EvidenceGatherer` is trusted orchestration code. It:
 
 - limits searches,
-- limits fetch attempts,
+- limits fetch attempts independently from successful pages,
+- limits successfully fetched pages,
 - limits bytes,
 - deduplicates URLs and content,
 - records provider/fetch/extraction/security events,
@@ -131,7 +145,7 @@ Its system instruction explicitly treats evidence as untrusted data. More import
 
 The model returns a strict `SynthesisDraft`, not `Source` or `EvidenceChunk` objects.
 
-Trusted code then verifies:
+Trusted code verifies:
 
 - claim IDs are unique,
 - claim evidence IDs refer only to evidence included in the synthesis context,
@@ -139,6 +153,27 @@ Trusted code then verifies:
 - conflict claim IDs refer to actual generated claims.
 
 Invented evidence references fail closed.
+
+### Semantic claim verifier
+
+Reference validation answers "does this evidence ID exist?" but not "does this evidence support this claim?"
+
+When configured, `ResearchVerifier` performs a separate structured LLM call after synthesis. For each synthesized claim it receives only:
+
+- the claim ID and text,
+- evidence chunks already cited by that claim,
+- provenance metadata for those chunks.
+
+The verifier returns `supported`, `partial`, `unsupported`, or `contradicted` plus a confidence value and the subset of cited evidence it believes provides support.
+
+Trusted code then enforces:
+
+- every claim is verified exactly once,
+- no unknown claim IDs,
+- no evidence IDs outside the claim's existing citations,
+- supported/partial verdicts identify at least one supporting evidence item.
+
+The verifier cannot add authority, sources, URLs, tools, or network actions. It is a quality-control layer, not a security authorization layer and not a formal proof system.
 
 ### LLM provider boundary
 
@@ -159,24 +194,29 @@ Structured output requests use JSON Schema at the provider and are validated aga
 - input tokens,
 - output tokens.
 
-Trusted trackers account for usage. If only one LLM call is available, the service skips LLM planning and reserves the call for synthesis.
+Trusted trackers account for usage. A full planner + synthesis + verification run normally requires three LLM calls. If budgets are smaller, the service degrades explicitly and records incomplete/quality reasons rather than silently exceeding them.
 
 ## Authority versus quality
 
-The architecture separates two questions:
+The architecture separates three questions:
 
 1. **Can hostile content gain authority?**
-2. **Can hostile or false content influence the answer?**
+2. **Does a citation reference real collected evidence?**
+3. **Does that evidence semantically support the claim?**
 
 The first is addressed with deterministic capability boundaries.
 
-The second cannot be solved purely by sandboxing. Source quality, misinformation, semantic citation support, and conflicting evidence require further evaluation and verification.
+The second is addressed with trusted provenance/reference validation.
 
-## Protocol adapters
+The third is improved with a separate semantic verification pass, but remains probabilistic and does not establish real-world truth.
 
-The core implementation currently targets the Python API.
+## Adapters
 
-Future adapters may expose the same `ResearchService` through CLI, REST, or MCP. Those adapters must not bypass core budgets or fetch policy.
+The Python API and CLI both call the same `ResearchService`.
+
+The CLI is intentionally thin: it does not perform its own search/fetch logic and therefore does not create a second authority path.
+
+Future REST or MCP adapters must preserve the same property.
 
 ## Deployment
 

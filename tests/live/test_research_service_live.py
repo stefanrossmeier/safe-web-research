@@ -22,6 +22,7 @@ from safe_web_research.research import (
     ResearchPlanner,
     ResearchService,
     ResearchSynthesizer,
+    ResearchVerifier,
 )
 from safe_web_research.search import (
     BraveSearchProvider,
@@ -64,6 +65,12 @@ async def test_research_service_live_end_to_end() -> None:
             llm,
             max_evidence_chars=30_000,
         ),
+        ResearchVerifier(
+            llm,
+            # Verification wraps cited evidence with claim and source metadata,
+            # so it needs bounded headroom above the synthesis evidence cap.
+            max_evidence_chars=60_000,
+        ),
     )
 
     result = await service.research(
@@ -77,13 +84,14 @@ async def test_research_service_live_end_to_end() -> None:
             allowed_domains=["python.org"],
             budget=ResearchBudget(
                 max_searches=2,
+                max_fetch_attempts=6,
                 max_pages=2,
                 max_bytes_per_page=500_000,
                 max_total_bytes=800_000,
                 max_redirects=3,
-                max_llm_calls=2,
-                max_input_tokens=15_000,
-                max_output_tokens=3_000,
+                max_llm_calls=3,
+                max_input_tokens=20_000,
+                max_output_tokens=10_000,
             ),
         )
     )
@@ -97,7 +105,7 @@ async def test_research_service_live_end_to_end() -> None:
 
     assert result.usage.pages_fetched >= 1
 
-    assert result.usage.llm_calls == 2
+    assert result.usage.llm_calls == 3
 
     assert result.usage.input_tokens > 0
 
@@ -106,6 +114,17 @@ async def test_research_service_live_end_to_end() -> None:
     evidence_ids = {evidence.chunk_id for evidence in result.evidence}
 
     assert all(set(claim.evidence_ids) <= evidence_ids for claim in result.claims)
+
+    assert len(result.claim_verifications) == len(result.claims)
+
+    claim_ids = {claim.claim_id for claim in result.claims}
+
+    assert {verification.claim_id for verification in result.claim_verifications} == claim_ids
+
+    assert all(
+        set(verification.supporting_evidence_ids) <= evidence_ids
+        for verification in result.claim_verifications
+    )
 
     assert all(
         (source.url.host or "") == "python.org" or (source.url.host or "").endswith(".python.org")

@@ -6,6 +6,7 @@ from safe_web_research.research.errors import (
     ResearchError,
     ResearchPlanningError,
     ResearchSynthesisError,
+    ResearchVerificationError,
 )
 from safe_web_research.research.gatherer import (
     EvidenceGatherer,
@@ -27,6 +28,10 @@ from safe_web_research.research.synthesizer import (
     ResearchSynthesizer,
     SynthesisOutcome,
 )
+from safe_web_research.research.verifier import (
+    ResearchVerifier,
+    VerificationOutcome,
+)
 
 __all__ = [
     "BudgetTracker",
@@ -40,6 +45,9 @@ __all__ = [
     "ResearchService",
     "ResearchSynthesizer",
     "ResearchSynthesisError",
+    "ResearchVerificationError",
+    "ResearchVerifier",
     "StoppingPolicy",
     "SynthesisOutcome",
+    "VerificationOutcome",
 ]

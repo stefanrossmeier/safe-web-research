@@ -1,4 +1,6 @@
 from safe_web_research.domain import (
+    ClaimSupport,
+    ClaimVerification,
     EvidenceBundle,
     ResearchRequest,
     ResearchResult,
@@ -16,23 +18,29 @@ from safe_web_research.research.planner import (
 from safe_web_research.research.synthesizer import (
     ResearchSynthesizer,
 )
+from safe_web_research.research.verifier import (
+    ResearchVerifier,
+)
 
-_PLANNER_OUTPUT_TOKEN_CAP = 1_000
-_SYNTHESIS_OUTPUT_TOKEN_CAP = 4_000
+_PLANNER_OUTPUT_TOKEN_CAP = 2_000
+_SYNTHESIS_OUTPUT_TOKEN_CAP = 16_000
+_VERIFICATION_OUTPUT_TOKEN_CAP = 16_000
 
 
 class ResearchService:
-    """Trusted orchestrator for bounded planning, gathering, and synthesis."""
+    """Trusted orchestrator for bounded planning, gathering, synthesis, and verification."""
 
     def __init__(
         self,
         planner: ResearchPlanner,
         gatherer: EvidenceGatherer,
         synthesizer: ResearchSynthesizer,
+        verifier: ResearchVerifier | None = None,
     ) -> None:
         self._planner = planner
         self._gatherer = gatherer
         self._synthesizer = synthesizer
+        self._verifier = verifier
 
     async def research(
         self,
@@ -42,15 +50,11 @@ class ResearchService:
 
         orchestration_reasons: list[str] = []
 
-        if request.budget.max_searches == 0:
-            return self._empty_result(
-                reason="max_searches_reached",
-                llm_usage=llm_budget.usage(),
-            )
+        initial_budget_reason = self._initial_budget_reason(request)
 
-        if request.budget.max_pages == 0 or request.budget.max_total_bytes == 0:
+        if initial_budget_reason is not None:
             return self._empty_result(
-                reason="max_pages_reached",
+                reason=initial_budget_reason,
                 llm_usage=llm_budget.usage(),
             )
 
@@ -73,17 +77,14 @@ class ResearchService:
 
         if planner_token_limit is None:
             queries = [request.question]
-
             orchestration_reasons.append("planner_skipped_llm_budget")
-
         else:
             planning = await self._planner.plan(
                 request,
-                max_output_tokens=(planner_token_limit),
+                max_output_tokens=planner_token_limit,
             )
 
             llm_budget.record_usage(planning.usage)
-
             queries = planning.plan.queries
 
         evidence_bundle = await self._gatherer.gather(
@@ -102,7 +103,7 @@ class ResearchService:
                 answer="",
                 sources=evidence_bundle.sources,
                 evidence=evidence_bundle.evidence,
-                security_events=(evidence_bundle.security_events),
+                security_events=evidence_bundle.security_events,
                 usage=self._merge_usage(
                     evidence_bundle.usage,
                     llm_budget.usage(),
@@ -116,10 +117,12 @@ class ResearchService:
             return self._result_without_synthesis(
                 evidence_bundle,
                 llm_budget=llm_budget,
-                orchestration_reasons=(orchestration_reasons),
+                orchestration_reasons=orchestration_reasons,
             )
 
-        synthesis_token_limit = llm_budget.reserve_call(_SYNTHESIS_OUTPUT_TOKEN_CAP)
+        synthesis_cap = self._synthesis_cap(llm_budget)
+
+        synthesis_token_limit = llm_budget.reserve_call(synthesis_cap)
 
         if synthesis_token_limit is None:
             orchestration_reasons.append("synthesis_skipped_llm_budget")
@@ -127,16 +130,56 @@ class ResearchService:
             return self._result_without_synthesis(
                 evidence_bundle,
                 llm_budget=llm_budget,
-                orchestration_reasons=(orchestration_reasons),
+                orchestration_reasons=orchestration_reasons,
             )
 
         synthesis = await self._synthesizer.synthesize(
             request,
             evidence_bundle,
-            max_output_tokens=(synthesis_token_limit),
+            max_output_tokens=synthesis_token_limit,
         )
 
         llm_budget.record_usage(synthesis.usage)
+
+        if synthesis.evidence_truncated:
+            orchestration_reasons.append("evidence_truncated_for_synthesis")
+
+        claim_verifications: list[ClaimVerification] = []
+
+        if self._verifier is not None:
+            if llm_budget.input_budget_exhausted:
+                orchestration_reasons.extend(
+                    [
+                        "max_input_tokens_reached",
+                        "verification_skipped_llm_budget",
+                    ]
+                )
+            else:
+                verification_token_limit = llm_budget.reserve_call(_VERIFICATION_OUTPUT_TOKEN_CAP)
+
+                if verification_token_limit is None:
+                    orchestration_reasons.append("verification_skipped_llm_budget")
+                else:
+                    verification = await self._verifier.verify(
+                        request,
+                        synthesis.draft.claims,
+                        evidence_bundle,
+                        max_output_tokens=verification_token_limit,
+                    )
+
+                    llm_budget.record_usage(verification.usage)
+
+                    claim_verifications = verification.verifications
+
+                    if any(
+                        item.verdict
+                        in {
+                            ClaimSupport.UNSUPPORTED,
+                            ClaimSupport.CONTRADICTED,
+                        }
+                        for item in claim_verifications
+                    ):
+                        orchestration_reasons.append("claim_support_issues")
 
         if llm_budget.input_budget_exhausted:
             orchestration_reasons.append("max_input_tokens_reached")
@@ -146,19 +189,65 @@ class ResearchService:
             claims=synthesis.draft.claims,
             sources=evidence_bundle.sources,
             evidence=evidence_bundle.evidence,
-            conflicts=(synthesis.draft.conflicts),
-            security_events=(evidence_bundle.security_events),
+            conflicts=synthesis.draft.conflicts,
+            claim_verifications=claim_verifications,
+            security_events=evidence_bundle.security_events,
             usage=self._merge_usage(
                 evidence_bundle.usage,
                 llm_budget.usage(),
             ),
-            incomplete_reasons=(
-                self._merge_reasons(
-                    evidence_bundle.incomplete_reasons,
-                    orchestration_reasons,
-                )
+            incomplete_reasons=self._merge_reasons(
+                evidence_bundle.incomplete_reasons,
+                orchestration_reasons,
             ),
         )
+
+    def _synthesis_cap(
+        self,
+        llm_budget: LLMBudgetTracker,
+    ) -> int:
+        remaining = llm_budget.remaining_output_tokens
+
+        if remaining <= 0:
+            return _SYNTHESIS_OUTPUT_TOKEN_CAP
+
+        if self._verifier is None or llm_budget.remaining_calls < 2 or remaining < 2:
+            return min(
+                _SYNTHESIS_OUTPUT_TOKEN_CAP,
+                remaining,
+            )
+
+        verification_reserve = min(
+            _VERIFICATION_OUTPUT_TOKEN_CAP,
+            max(
+                1,
+                remaining // 2,
+            ),
+        )
+
+        return min(
+            _SYNTHESIS_OUTPUT_TOKEN_CAP,
+            max(
+                1,
+                remaining - verification_reserve,
+            ),
+        )
+
+    @staticmethod
+    def _initial_budget_reason(request: ResearchRequest) -> str | None:
+        if request.budget.max_searches == 0:
+            return "max_searches_reached"
+
+        if request.budget.max_fetch_attempts == 0:
+            return "max_fetch_attempts_reached"
+
+        if request.budget.max_pages == 0:
+            return "max_pages_reached"
+
+        if request.budget.max_total_bytes == 0:
+            return "max_total_bytes_reached"
+
+        return None
 
     @staticmethod
     def _empty_result(
@@ -184,16 +273,14 @@ class ResearchService:
             answer="",
             sources=evidence_bundle.sources,
             evidence=evidence_bundle.evidence,
-            security_events=(evidence_bundle.security_events),
+            security_events=evidence_bundle.security_events,
             usage=cls._merge_usage(
                 evidence_bundle.usage,
                 llm_budget.usage(),
             ),
-            incomplete_reasons=(
-                cls._merge_reasons(
-                    evidence_bundle.incomplete_reasons,
-                    orchestration_reasons,
-                )
+            incomplete_reasons=cls._merge_reasons(
+                evidence_bundle.incomplete_reasons,
+                orchestration_reasons,
             ),
         )
 
@@ -203,14 +290,14 @@ class ResearchService:
         llm_usage: ResearchUsage,
     ) -> ResearchUsage:
         return ResearchUsage(
-            search_requests=(evidence_usage.search_requests),
-            fetch_attempts=(evidence_usage.fetch_attempts),
-            pages_fetched=(evidence_usage.pages_fetched),
-            bytes_fetched=(evidence_usage.bytes_fetched),
-            llm_calls=(llm_usage.llm_calls),
-            input_tokens=(llm_usage.input_tokens),
-            output_tokens=(llm_usage.output_tokens),
-            estimated_cost_usd=(llm_usage.estimated_cost_usd),
+            search_requests=evidence_usage.search_requests,
+            fetch_attempts=evidence_usage.fetch_attempts,
+            pages_fetched=evidence_usage.pages_fetched,
+            bytes_fetched=evidence_usage.bytes_fetched,
+            llm_calls=llm_usage.llm_calls,
+            input_tokens=llm_usage.input_tokens,
+            output_tokens=llm_usage.output_tokens,
+            estimated_cost_usd=llm_usage.estimated_cost_usd,
         )
 
     @staticmethod

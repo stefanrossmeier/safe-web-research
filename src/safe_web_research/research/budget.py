@@ -25,7 +25,10 @@ class BudgetTracker:
         return True
 
     def reserve_fetch(self) -> int | None:
-        if self._fetch_attempts >= self.budget.max_pages:
+        if self._fetch_attempts >= self.budget.max_fetch_attempts:
+            return None
+
+        if self._pages_fetched >= self.budget.max_pages:
             return None
 
         remaining_bytes = self.budget.max_total_bytes - self._bytes_fetched
@@ -47,6 +50,9 @@ class BudgetTracker:
         if byte_count < 0:
             raise ValueError("byte_count must not be negative")
 
+        if self._pages_fetched >= self.budget.max_pages:
+            raise RuntimeError("fetcher violated successful-page budget")
+
         if self._bytes_fetched + byte_count > self.budget.max_total_bytes:
             raise RuntimeError("fetcher violated total byte budget")
 
@@ -57,7 +63,14 @@ class BudgetTracker:
     def remaining_fetch_attempts(self) -> int:
         return max(
             0,
-            self.budget.max_pages - self._fetch_attempts,
+            self.budget.max_fetch_attempts - self._fetch_attempts,
+        )
+
+    @property
+    def remaining_pages(self) -> int:
+        return max(
+            0,
+            self.budget.max_pages - self._pages_fetched,
         )
 
     @property
@@ -73,7 +86,11 @@ class BudgetTracker:
 
     @property
     def fetch_exhausted(self) -> bool:
-        return self.remaining_fetch_attempts == 0 or self.remaining_bytes == 0
+        return (
+            self.remaining_fetch_attempts == 0
+            or self.remaining_pages == 0
+            or self.remaining_bytes == 0
+        )
 
     def usage(self) -> ResearchUsage:
         return ResearchUsage(

@@ -20,8 +20,13 @@ def test_research_request_defaults() -> None:
 
     assert request.api_version == "v1"
     assert request.question == "What changed in Python 3.15?"
-    assert request.budget.max_searches == 5
-    assert request.budget.max_pages == 10
+    assert request.budget.max_searches == 10
+    assert request.budget.max_fetch_attempts == 40
+    assert request.budget.max_pages == 20
+    assert request.budget.max_total_bytes == 50_000_000
+    assert request.budget.max_llm_calls == 10
+    assert request.budget.max_input_tokens == 500_000
+    assert request.budget.max_output_tokens == 50_000
     assert request.allowed_domains == []
     assert request.blocked_domains == []
 
@@ -44,6 +49,11 @@ def test_empty_question_is_rejected() -> None:
 def test_invalid_budget_is_rejected() -> None:
     with pytest.raises(ValidationError):
         ResearchBudget(max_searches=-1)
+
+
+def test_budget_absolute_ceiling_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        ResearchBudget(max_input_tokens=5_000_001)
 
 
 def test_search_request_validates_result_limit() -> None:

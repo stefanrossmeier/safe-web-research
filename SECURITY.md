@@ -29,6 +29,7 @@ The project is designed around these invariants:
 - Redirect targets are revalidated.
 - Non-global IP destinations are rejected.
 - Claims returned by synthesis may reference only evidence IDs created by trusted code.
+- Semantic verification may reference only claim IDs and evidence IDs already present in the trusted result graph.
 - Structured LLM output is schema-validated locally.
 - Resource budgets are enforced by trusted code.
 - Suspicious-content detection is diagnostic only and is not required for containment.
@@ -46,7 +47,7 @@ Never commit:
 - production URLs containing secrets,
 - captured headers containing authorization tokens.
 
-Live tests read credentials from environment variables and are excluded from deterministic test runs.
+Live tests and the CLI read credentials from environment variables and are excluded from deterministic test runs. The CLI intentionally does not accept API keys as command-line options.
 
 ## Threats explicitly considered
 
@@ -72,7 +73,7 @@ The project does not guarantee:
 
 - factual correctness of web sources or answers,
 - perfect prompt-injection detection,
-- semantic entailment between every claim and cited chunk,
+- formal semantic entailment or objective truth, even when the verifier returns `supported`,
 - protection against a compromised host or Python runtime,
 - protection equivalent to deployment-level egress filtering or sandboxing,
 - availability of third-party providers,

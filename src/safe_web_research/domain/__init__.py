@@ -10,12 +10,15 @@ from safe_web_research.domain.llm import (
 )
 from safe_web_research.domain.research import (
     Claim,
+    ClaimSupport,
+    ClaimVerification,
     Conflict,
     EvidenceBundle,
     ResearchPlan,
     ResearchRequest,
     ResearchResult,
     SynthesisDraft,
+    VerificationDraft,
 )
 from safe_web_research.domain.search import SearchRequest, SearchResult
 from safe_web_research.domain.security import (
@@ -27,6 +30,8 @@ from safe_web_research.domain.usage import ResearchBudget, ResearchUsage
 
 __all__ = [
     "Claim",
+    "ClaimSupport",
+    "ClaimVerification",
     "Conflict",
     "EvidenceBundle",
     "EvidenceChunk",
@@ -50,4 +55,5 @@ __all__ = [
     "SecuritySeverity",
     "Source",
     "SynthesisDraft",
+    "VerificationDraft",
 ]

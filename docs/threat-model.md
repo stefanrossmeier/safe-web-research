@@ -2,7 +2,7 @@
 
 ## Status
 
-M10 threat model for the pre-1.0 standalone research core.
+M11/M12 threat model for the pre-1.0 standalone research core and CLI.
 
 This document describes security properties implemented and tested in the current codebase. It is not a claim of formal verification or production certification.
 
@@ -141,7 +141,9 @@ V1 does not provide:
 - unknown evidence IDs fail closed,
 - extra action/provenance output fields fail schema validation.
 
-**Residual risk:** An existing evidence chunk may be cited even when it does not semantically support the claim. Semantic entailment verification is a separate quality/security milestone.
+**Additional control:** When `ResearchVerifier` is configured, each synthesized claim is checked in a separate structured LLM call against only the evidence chunks already cited by that claim. Trusted code validates verifier claim IDs and supporting evidence IDs. Unsupported or contradicted claims are surfaced as quality flags.
+
+**Residual risk:** Semantic verification is probabilistic. A verifier can misclassify support, and a supported claim can still be false if the source itself is false. The verifier does not establish truth or formal entailment.
 
 ### Resource exhaustion / denial of wallet
 
@@ -150,7 +152,7 @@ V1 does not provide:
 **Controls:**
 
 - maximum searches,
-- maximum page/fetch attempts,
+- separate maximum fetch attempts and successfully fetched pages,
 - per-page and total byte caps,
 - redirect caps,
 - model-call caps,
@@ -184,7 +186,20 @@ V1 does not provide:
 - domain allow/block filters,
 - freshness controls.
 
-**Residual risk:** Search rank is not source trust. V1 does not yet implement authoritative-source scoring or semantic claim verification.
+**Residual risk:** Search rank is not source trust. V1 performs semantic claim-support verification when configured, but does not yet implement authoritative-source scoring or independent fact checking against sources outside the gathered evidence.
+
+### CLI credential and authority surface
+
+**Scenario:** A convenience CLI accidentally creates a second code path that bypasses budgets/fetch policy, or exposes API keys in shell history.
+
+**Controls:**
+
+- the CLI constructs and calls the same `ResearchService`,
+- it does not contain independent network-fetch logic,
+- API keys are read from environment variables rather than accepted as CLI flags,
+- all domain and budget inputs still pass through strict domain models.
+
+**Residual risk:** Environment variables can still be exposed by a compromised local process or shell environment. The CLI does not provide secret-management isolation.
 
 ## Security-event semantics
 

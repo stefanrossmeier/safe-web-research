@@ -290,6 +290,12 @@ class EvidenceGatherer:
         if tracker.remaining_fetch_attempts == 0:
             cls._add_reason(
                 reasons,
+                "max_fetch_attempts_reached",
+            )
+
+        if tracker.remaining_pages == 0:
+            cls._add_reason(
+                reasons,
                 "max_pages_reached",
             )
 

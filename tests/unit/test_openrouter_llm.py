@@ -247,6 +247,86 @@ async def test_openrouter_maps_request_errors(
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_openrouter_includes_sanitized_provider_request_error_message() -> None:
+    respx.post(OPENROUTER_CHAT_COMPLETIONS_URL).mock(
+        return_value=httpx.Response(
+            400,
+            json={
+                "error": {
+                    "message": "  Context\n length   exceeded.  ",
+                    "metadata": {
+                        "raw": "secret request body must not appear",
+                    },
+                },
+                "request": {
+                    "messages": [
+                        {
+                            "content": "sensitive prompt must not appear",
+                        }
+                    ]
+                },
+            },
+        )
+    )
+
+    provider = OpenRouterLLMProvider("test-key")
+
+    with pytest.raises(
+        LLMProviderRequestError,
+        match=(
+            r"OpenRouter rejected the request with HTTP 400: "
+            r"Context length exceeded\."
+        ),
+    ) as exc_info:
+        await provider.complete(
+            LLMRequest(
+                messages=[
+                    LLMMessage(
+                        role=LLMRole.USER,
+                        content="test",
+                    )
+                ]
+            )
+        )
+
+    message = str(exc_info.value)
+
+    assert "secret request body" not in message
+    assert "sensitive prompt" not in message
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_openrouter_ignores_non_json_request_error_body() -> None:
+    respx.post(OPENROUTER_CHAT_COMPLETIONS_URL).mock(
+        return_value=httpx.Response(
+            413,
+            text="raw upstream body that must not be exposed",
+        )
+    )
+
+    provider = OpenRouterLLMProvider("test-key")
+
+    with pytest.raises(
+        LLMProviderRequestError,
+        match=r"OpenRouter rejected the request with HTTP 413$",
+    ) as exc_info:
+        await provider.complete(
+            LLMRequest(
+                messages=[
+                    LLMMessage(
+                        role=LLMRole.USER,
+                        content="test",
+                    )
+                ]
+            )
+        )
+
+    assert "raw upstream body" not in str(exc_info.value)
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_openrouter_maps_server_error() -> None:
     respx.post(OPENROUTER_CHAT_COMPLETIONS_URL).mock(return_value=httpx.Response(503))
 
@@ -357,6 +437,54 @@ async def test_openrouter_rejects_invalid_json_for_structured_output() -> None:
     with pytest.raises(
         LLMStructuredOutputError,
         match="invalid JSON",
+    ):
+        await provider.complete(
+            LLMRequest(
+                messages=[
+                    LLMMessage(
+                        role=LLMRole.USER,
+                        content="test",
+                    )
+                ],
+                response_schema={
+                    "type": "object",
+                    "properties": {
+                        "value": {
+                            "type": "string",
+                        }
+                    },
+                    "required": ["value"],
+                    "additionalProperties": False,
+                },
+            )
+        )
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_openrouter_reports_truncated_structured_output() -> None:
+    respx.post(OPENROUTER_CHAT_COMPLETIONS_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "model": "test/model",
+                "choices": [
+                    {
+                        "finish_reason": "length",
+                        "message": {
+                            "content": '{"value":"truncated',
+                        },
+                    }
+                ],
+            },
+        )
+    )
+
+    provider = OpenRouterLLMProvider("test-key")
+
+    with pytest.raises(
+        LLMStructuredOutputError,
+        match="completion token limit was reached",
     ):
         await provider.complete(
             LLMRequest(

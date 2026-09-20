@@ -76,3 +76,15 @@ Please preserve these principles:
 ## Documentation
 
 If a change alters a trust boundary, security invariant, or deliberate tradeoff, update the relevant architecture/threat-model document and consider adding an ADR.
+
+## Test and benchmark evidence
+
+For release or benchmark work, record a reproducible test-run artifact instead of relying on copied terminal output:
+
+```bash
+uv run python scripts/record_test_run.py
+```
+
+Use `--include-live` only after loading local credentials. Generated reports under `reports/test-runs/` intentionally contain environment metadata and test statistics but not secret values.
+
+Comparative security claims should follow the methodology in `benchmarks/README.md`. Do not publish a bounded-vs-direct-agent superiority claim without committing the scenario set, model/provider configuration, per-case outcomes, aggregate metrics, and the corresponding test-run report.
