@@ -31,6 +31,8 @@ class ResearchUsage(StrictModel):
     """Resources consumed by one research operation."""
 
     search_requests: int = Field(default=0, ge=0)
+
+    fetch_attempts: int = Field(default=0, ge=0)
     pages_fetched: int = Field(default=0, ge=0)
     bytes_fetched: int = Field(default=0, ge=0)
 

@@ -21,6 +21,8 @@ class SecurityEventType(StrEnum):
     SUSPICIOUS_CONTENT = "suspicious_content"
     PROVIDER_ERROR = "provider_error"
     POLICY_VIOLATION = "policy_violation"
+    FETCH_ERROR = "fetch_error"
+    EXTRACTION_ERROR = "extraction_error"
 
 
 MetadataValue = str | int | float | bool | None

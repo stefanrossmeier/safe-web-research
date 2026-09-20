@@ -11,6 +11,7 @@ from safe_web_research.domain.llm import (
 from safe_web_research.domain.research import (
     Claim,
     Conflict,
+    EvidenceBundle,
     ResearchPlan,
     ResearchRequest,
     ResearchResult,
@@ -26,6 +27,7 @@ from safe_web_research.domain.usage import ResearchBudget, ResearchUsage
 __all__ = [
     "Claim",
     "Conflict",
+    "EvidenceBundle",
     "EvidenceChunk",
     "ExtractedDocument",
     "FetchedDocument",

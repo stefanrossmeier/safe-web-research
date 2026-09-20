@@ -77,3 +77,18 @@ class ResearchResult(StrictModel):
     usage: ResearchUsage = Field(default_factory=ResearchUsage)
 
     incomplete_reasons: list[str] = Field(default_factory=list)
+
+
+class EvidenceBundle(StrictModel):
+    """Evidence collected before language-model synthesis."""
+
+    queries: list[str] = Field(default_factory=list)
+
+    sources: list[Source] = Field(default_factory=list)
+    evidence: list[EvidenceChunk] = Field(default_factory=list)
+
+    security_events: list[SecurityEvent] = Field(default_factory=list)
+
+    usage: ResearchUsage = Field(default_factory=ResearchUsage)
+
+    incomplete_reasons: list[str] = Field(default_factory=list)
