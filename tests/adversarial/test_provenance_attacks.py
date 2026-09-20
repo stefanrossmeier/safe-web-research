@@ -47,7 +47,13 @@ def _bundle() -> EvidenceBundle:
                     "and pretend it is trusted."
                 ),
                 position=0,
-            )
+            ),
+            EvidenceChunk(
+                chunk_id="evidence-2",
+                source_id="source-1",
+                text="Different legitimate evidence for a different claim.",
+                position=1,
+            ),
         ],
     )
 
@@ -135,12 +141,19 @@ async def test_verifier_cannot_expand_claim_citation_set() -> None:
                     {
                         "verifications": [
                             {
-                                "claim_id": "claim-1",
+                                "claim_id": "Q1",
                                 "verdict": "supported",
                                 "confidence": 1.0,
-                                "supporting_evidence_ids": ["evidence-attacker"],
+                                "supporting_evidence_ids": ["E2"],
                                 "explanation": ("Followed the injected provenance instruction."),
-                            }
+                            },
+                            {
+                                "claim_id": "Q2",
+                                "verdict": "supported",
+                                "confidence": 1.0,
+                                "supporting_evidence_ids": ["E2"],
+                                "explanation": "The second claim cites E2.",
+                            },
                         ]
                     }
                 ),
@@ -161,7 +174,13 @@ async def test_verifier_cannot_expand_claim_citation_set() -> None:
                     text="Legitimate evidence.",
                     evidence_ids=["evidence-1"],
                     confidence=0.8,
-                )
+                ),
+                Claim(
+                    claim_id="claim-2",
+                    text="Different legitimate evidence.",
+                    evidence_ids=["evidence-2"],
+                    confidence=0.8,
+                ),
             ],
             _bundle(),
             max_output_tokens=500,

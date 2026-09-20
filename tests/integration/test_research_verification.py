@@ -122,10 +122,10 @@ async def test_research_service_verifies_synthesized_claims() -> None:
                     {
                         "verifications": [
                             {
-                                "claim_id": "claim-1",
+                                "claim_id": "Q1",
                                 "verdict": "supported",
                                 "confidence": 0.99,
-                                "supporting_evidence_ids": ["evidence-1"],
+                                "supporting_evidence_ids": ["E1"],
                                 "explanation": ("The evidence directly supports the claim."),
                             }
                         ]
@@ -166,6 +166,8 @@ async def test_research_service_verifies_synthesized_claims() -> None:
 
     assert result.answer
     assert len(result.claim_verifications) == 1
+    assert result.claim_verifications[0].claim_id == "claim-1"
+    assert result.claim_verifications[0].supporting_evidence_ids == ["evidence-1"]
     assert result.claim_verifications[0].verdict == "supported"
     assert result.usage.llm_calls == 3
     assert result.usage.input_tokens == 160
@@ -237,7 +239,7 @@ async def test_research_service_surfaces_unsupported_claims() -> None:
                     {
                         "verifications": [
                             {
-                                "claim_id": "claim-1",
+                                "claim_id": "Q1",
                                 "verdict": "unsupported",
                                 "confidence": 0.95,
                                 "supporting_evidence_ids": [],
@@ -298,5 +300,7 @@ async def test_research_service_surfaces_unsupported_claims() -> None:
         )
     )
 
+    assert result.claim_verifications[0].claim_id == "claim-1"
+    assert result.claim_verifications[0].supporting_evidence_ids == []
     assert result.claim_verifications[0].verdict == "unsupported"
     assert "claim_support_issues" in result.incomplete_reasons
