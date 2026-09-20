@@ -8,6 +8,17 @@ This directory contains **generated evidence artifacts**, not executable benchma
 | [security_benchmark/](security_benchmark/README.md) | `python -m benchmarks.security` | deterministic containment benchmark evidence |
 | [research_quality/](research_quality/README.md) | `python -m benchmarks.research_quality` | live research-quality/efficiency evidence |
 
-Timestamped artifacts identify a specific run; `latest.*` is a convenience copy. Authoritative/public results should be generated from a clean Git revision and reviewed before commit.
+For a public release, do not run these independently and commit a mixture of revisions. Use:
 
-Historical artifacts may contain case-file paths that were valid at the commit recorded inside the artifact. Generated evidence is not rewritten after repository-layout changes.
+```bash
+uv run python scripts/record_release_evidence.py \
+  --model z-ai/glm-5.3-flash
+```
+
+The release-evidence script starts from one clean Git commit, writes all three evaluations to an
+ignored staging directory, verifies that they all reference the same clean revision, requires every
+quality case to pass and the bounded architecture to retain its containment invariants, and only
+then replaces the public report artifacts together.
+
+Timestamped artifacts identify the concrete run; `latest.*` is a convenience copy of that same run.
+Older pre-release report artifacts are intentionally not retained in the public tree.

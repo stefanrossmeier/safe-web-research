@@ -38,3 +38,6 @@ coverage.xml
 *.tmp
 *.swp
 *~
+
+# Release evidence staging
+.release-evidence-tmp/

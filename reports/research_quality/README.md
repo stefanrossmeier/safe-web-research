@@ -12,3 +12,6 @@ Reports record per-case pass/fail, expected-term coverage, semantic support, har
 Because the benchmark uses live providers/public web, results are stochastic and must not be presented as a universal model ranking.
 
 Methodology: [`../../benchmarks/research_quality/README.md`](../../benchmarks/research_quality/README.md).
+
+For public release evidence, prefer `scripts/record_release_evidence.py` so this report is generated
+from the same clean commit as the test and security reports.

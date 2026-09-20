@@ -16,3 +16,6 @@ Files:
 Methodology: [`../../benchmarks/security/README.md`](../../benchmarks/security/README.md).
 
 A clean result is evidence for the committed corpus and benchmark semantics, not proof against all future attacks.
+
+For public release evidence, prefer `scripts/record_release_evidence.py` so this report is generated
+from the same clean commit as the test and research-quality reports.

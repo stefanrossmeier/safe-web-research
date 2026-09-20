@@ -14,7 +14,7 @@ Initial public release of safe-web-research.
 - Structured planning, synthesis, and semantic claim verification
 - Claim-scoped verifier evidence constraints
 - OpenRouter model abstraction
-- Tested with GPT-5 Mini, GLM 5.3 Flash, and DeepSeek V4.1 Flash
+- Tested during development with GPT-5 Mini, GLM 5.3 Flash, and DeepSeek V4.1 Flash
 - Deterministic adversarial containment benchmark
 - Reproducible live research-quality and test-run reports
 - Standalone CLI and Python package

@@ -1,55 +1,60 @@
 # safe-web-research
 
+[![CI](https://github.com/stefanrossmeier/safe-web-research/actions/workflows/ci.yml/badge.svg)](https://github.com/stefanrossmeier/safe-web-research/actions/workflows/ci.yml)
+
 Bounded, provenance-aware web research for AI systems.
 
-`safe-web-research` is a small reference implementation for a specific security problem: an AI system needs information from the public Internet, but Internet content is untrusted and may try to manipulate the model that reads it.
+`safe-web-research` is a reference implementation for a specific security problem: an AI system
+needs information from the public Internet, but Internet content is untrusted and may try to
+manipulate the model that reads it.
 
-The project therefore keeps **authority in trusted Python code**. Models may plan searches, summarize evidence, and verify claims, but they do not receive arbitrary HTTP, browser, shell, filesystem, or action tools.
+The project keeps **authority in trusted Python code**. Models may plan searches, summarize
+evidence, and verify claims, but they do not receive arbitrary HTTP, browser, shell, filesystem, or
+action tools.
 
-> **Security goal:** even if hostile web content successfully influences a model, that influence should not automatically become internal-network access, secret access, arbitrary network calls, shell execution, filesystem mutation, fabricated provenance, or unbounded resource use.
+> **Security goal:** even if hostile web content influences a model, that influence should not
+> automatically become internal-network access, secret access, arbitrary network calls, shell
+> execution, filesystem mutation, fabricated provenance, or unbounded resource use.
 
 ## How it works
 
 ```text
 question
-  |
-  v
-planner LLM -> structured search queries
-  |
-  v
-trusted Python orchestration
-  +-- Brave Search
-  +-- SSRF-resistant SafeFetcher
-  +-- static extraction
-  +-- deterministic evidence selection / stopping
-  |
-  v
-synthesizer LLM -> claims + evidence references
-  |
-  v
-trusted reference validation
-  |
-  v
-verifier LLM -> support verdicts
-  |
-  v
-ResearchResult
+  -> planner LLM (structured search queries)
+  -> trusted Python orchestration
+       -> Brave Search
+       -> SSRF-resistant SafeFetcher
+       -> static extraction
+       -> deterministic evidence selection / stopping
+  -> synthesizer LLM (claims + evidence references)
+  -> trusted reference validation
+  -> verifier LLM (claim-scoped support verdicts)
+  -> ResearchResult
 ```
 
-Key controls include DNS/IP validation, validated-address pinning, manual redirect validation, bounded gzip decoding, hard resource budgets, source/evidence provenance, strict structured outputs, and claim-support verification. Prompt-injection scanning exists for observability, not as the authorization boundary.
+Key controls include DNS/IP validation, validated-address pinning, manual redirect validation,
+bounded gzip decoding, hard resource budgets, provenance checks, strict structured outputs, and
+claim-support verification. Prompt-injection scanning is observability, not the authorization
+boundary.
+
+## When to use it
+
+Use this project when an application or agent needs **bounded public-web research** with explicit
+network, provenance, and resource controls. It is designed as a security-oriented reference
+architecture that can be embedded behind a larger agent system.
+
+It is **not** a general browser agent, an autonomous deep-research product, or a prompt-injection
+detector. It deliberately gives the model less authority than those systems often do.
 
 ## Quick start
 
-Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), a Brave Search API key, and an OpenRouter API key.
+Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), a Brave Search API key, and an
+OpenRouter API key.
 
 ```bash
 uv sync
 cp .env.example .env
-```
 
-Load your local credentials and run one bounded research request:
-
-```bash
 set -a
 source .env
 set +a
@@ -59,7 +64,27 @@ uv run safe-web-research research \
   --domain python.org
 ```
 
-For setup, JSON output, budget controls, live tests, and Python usage, see **[Quickstart](docs/QUICKSTART.md)**.
+For setup, JSON output, budget controls, live tests, and Python usage, see
+**[Quickstart](docs/QUICKSTART.md)**.
+
+## Example result
+
+Abridged CLI output has this shape:
+
+```text
+Answer:
+<concise answer synthesized from the bounded evidence set>
+
+Claims:
+- [supported] <claim>
+  supporting: evidence-...
+
+Sources:
+- <source title> — https://...
+```
+
+The complete result can also be emitted as JSON with `--json`, including provenance, verification,
+security events, incomplete/quality flags, and resource usage.
 
 ## What is included
 
@@ -67,24 +92,25 @@ For setup, JSON output, budget controls, live tests, and Python usage, see **[Qu
 - SSRF-resistant HTTP(S) fetching with DNS/IP policy and validated-address pinning;
 - bounded identity/gzip response handling and static HTML/text extraction;
 - deterministic evidence selection, source diversity, and early stopping below hard budgets;
-- provenance-preserving sources and evidence chunks;
-- structured planning, synthesis, and semantic claim verification;
+- provenance-preserving sources/evidence and claim-scoped semantic verification;
 - deterministic, integration, adversarial, and opt-in live tests;
-- a deterministic compromised-model containment benchmark;
-- a paid live research-quality/efficiency benchmark;
+- deterministic security and paid live research-quality benchmarks;
 - a standalone CLI and Python API.
 
-The project is a **pre-1.0 reference implementation**, not an audited security product. It does not claim perfect prompt-injection detection, factual correctness, formal entailment, or protection from a compromised host runtime.
+This is a **pre-1.0 reference implementation**, not an audited security product. It does not claim
+perfect prompt-injection detection, factual correctness, formal entailment, or protection from a
+compromised host runtime.
 
 ## Evidence
 
-The repository keeps executable evaluations separate from generated evidence:
+Executable evaluations live under [`benchmarks/`](benchmarks/README.md); recorded release evidence
+lives under [`reports/`](reports/README.md). The current deterministic containment benchmark records
+zero accepted forbidden actions for `safe-web-research` across its committed adversarial corpus.
+That is evidence for the committed corpus and benchmark semantics, not proof against all future
+attacks.
 
-- [Security containment benchmark](benchmarks/security/README.md) → [recorded results](reports/security_benchmark/README.md)
-- [Live research-quality benchmark](benchmarks/research_quality/README.md) → [recorded results](reports/research_quality/README.md)
-- [Recorded test runs](reports/test_runs/README.md)
-
-The current deterministic containment benchmark records zero accepted forbidden actions for `safe-web-research` across its committed adversarial corpus. That is evidence for that corpus and benchmark model, not proof against all future attacks.
+For release evidence, all report families are regenerated from one clean commit with
+`scripts/record_release_evidence.py`; see [Testing and evaluation](docs/testing.md).
 
 ## Documentation
 
@@ -97,6 +123,13 @@ The current deterministic containment benchmark records zero accepted forbidden 
 - [Architecture decision records](docs/adr/README.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
+
+## Support and maintenance
+
+For bugs and feature requests, use [GitHub Issues](https://github.com/stefanrossmeier/safe-web-research/issues).
+For vulnerabilities, follow [SECURITY.md](SECURITY.md) rather than opening a public issue. The
+project is maintained by [@stefanrossmeier](https://github.com/stefanrossmeier) as a reference and
+portfolio project; no support SLA is provided.
 
 ## License
 

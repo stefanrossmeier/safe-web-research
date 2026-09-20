@@ -173,3 +173,41 @@ Passing tests do not prove:
 - availability/security of third-party providers.
 
 Tests and benchmarks make specific invariants and claims reproducible; they do not turn the project into a formally verified system.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs the credential-free quality gate and builds the package on every
+push and pull request:
+
+```bash
+uv sync --locked
+uv run --frozen python scripts/check.py
+uv build
+```
+
+Live Brave/OpenRouter checks remain manual because they require secrets, public network access, and
+may incur provider cost.
+
+## Coherent release evidence
+
+A public release should not mix test/benchmark reports generated from different commits. After
+committing the release-candidate implementation and loading `.env`, run all three evidence families
+through the release helper:
+
+```bash
+set -a
+source .env
+set +a
+
+uv run python scripts/record_release_evidence.py \
+  --model z-ai/glm-5.3-flash
+```
+
+This command runs the live test report, deterministic security benchmark, and live research-quality
+benchmark into an ignored staging directory while the repository remains clean. It verifies that all
+three recorded the same Git commit with `git_dirty: false`, requires all quality cases to pass, checks
+the bounded security metrics, then replaces the committed report artifacts together.
+
+Because the research-quality benchmark is live, this command calls external providers and may incur
+API charges. Review the generated `reports/*/latest.md` files before committing them as one evidence
+commit.
