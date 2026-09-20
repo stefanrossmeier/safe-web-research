@@ -1,8 +1,10 @@
 [project]
 name = "safe-web-research"
 version = "0.1.0"
-description = "Add your description here"
+description = "Bounded, provenance-aware web research with SSRF-resistant fetching and adversarial security tests"
 readme = "README.md"
+license = "Apache-2.0"
+keywords = ["ai", "agents", "research", "security", "prompt-injection", "ssrf"]
 authors = [
     { name = "stefanrossmeier", email = "github@rossmeier.info" }
 ]
