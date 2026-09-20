@@ -1,5 +1,13 @@
 from safe_web_research.domain.evidence import EvidenceChunk, Source
+from safe_web_research.domain.extraction import ExtractedDocument
 from safe_web_research.domain.fetch import FetchedDocument, FetchRequest
+from safe_web_research.domain.llm import (
+    LLMMessage,
+    LLMRequest,
+    LLMResponse,
+    LLMRole,
+    LLMUsage,
+)
 from safe_web_research.domain.research import (
     Claim,
     Conflict,
@@ -19,8 +27,14 @@ __all__ = [
     "Claim",
     "Conflict",
     "EvidenceChunk",
-    "FetchRequest",
+    "ExtractedDocument",
     "FetchedDocument",
+    "FetchRequest",
+    "LLMMessage",
+    "LLMRequest",
+    "LLMResponse",
+    "LLMRole",
+    "LLMUsage",
     "ResearchBudget",
     "ResearchPlan",
     "ResearchRequest",
