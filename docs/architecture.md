@@ -1,12 +1,12 @@
 # Architecture
 
-## Overview
+## Design rule
 
-`safe-web-research` is a protocol-neutral research core built around one design rule:
+`safe-web-research` separates model reasoning from execution authority:
 
-> Trusted Python code owns authority; models propose structured data.
+> **Models propose structured data. Trusted Python decides what may execute.**
 
-Planning, search, fetching, extraction, evidence handling, synthesis, semantic verification, and presentation are separated so each trust boundary can be tested independently.
+This is the central design constraint behind network access, provenance, resource budgets, and model integration.
 
 ## Data flow
 
@@ -14,235 +14,214 @@ Planning, search, fetching, extraction, evidence handling, synthesis, semantic v
 ResearchRequest
       |
       v
-ResearchPlanner
-  LLMProvider
+ResearchPlanner (LLM, no tools)
       |
-      | validated ResearchPlan
+      | validated search queries
       v
 ResearchService
       |
       v
 EvidenceGatherer
       |
-      +---- SearchProvider ----> Brave Search
+      +-- SearchProvider --> Brave Search
       |
-      +---- SafeFetcher
-      |       |
-      |       +---- URLPolicy
-      |       +---- DNSResolver
-      |       +---- validated IP connection
-      |       +---- manual redirects
+      +-- SafeFetcher
+      |     +-- URL/DNS/IP policy
+      |     +-- validated-address pinning
+      |     +-- manual redirect validation
+      |     +-- bounded identity/gzip body decoding
       |
-      +---- Extractor ----> WebExtractor
-      |
-      +---- SuspiciousContentScanner
+      +-- WebExtractor (static HTML/text)
+      +-- SuspiciousContentScanner (observability only)
+      +-- EvidenceSelector (deterministic relevance/diversity)
       |
       v
 EvidenceBundle
       |
       v
-ResearchSynthesizer
-  LLMProvider
+ResearchSynthesizer (LLM, no tools)
       |
-      | validated SynthesisDraft
+      | claims + model-facing evidence refs
       v
-trusted evidence-reference validation
+trusted reference resolution/validation
       |
       v
-ResearchVerifier
-  LLMProvider
+ResearchVerifier (LLM, no tools)
       |
-      | claim + cited evidence only
-      | validated VerificationDraft
+      | support verdicts + model-facing refs
       v
-trusted verification-reference validation
+trusted reference resolution/validation
       |
       v
 ResearchResult
-      |
-      +---- Python API
-      |
-      +---- CLI
+      +-- Python API
+      +-- CLI
 ```
+
+The CLI and Python callers use the same `ResearchService`; the CLI is not a separate research implementation.
 
 ## Trust boundaries
 
 ### Caller input
 
-`ResearchRequest` is untrusted. Pydantic models reject extra fields and enforce bounded values. Domain filters are validated as domain names rather than accepted as arbitrary search syntax.
-
-### Search provider
-
-Search providers return normalized `SearchResult` objects. Search rank is discovery metadata, not a trust score.
-
-Search results do not directly become evidence. Their URLs must pass the fetch layer.
-
-### Network fetch boundary
-
-`SafeFetcher` is the primary network authority.
-
-V1 policy:
-
-- only HTTP and HTTPS,
-- only ports 80 and 443,
-- no URL userinfo,
-- no single-label/internal-style hostnames,
-- all resolved addresses must be globally reachable,
-- automatic redirects are disabled,
-- each redirect target is fully revalidated,
-- the HTTP connection uses an already-validated address,
-- the original hostname is preserved for `Host` and TLS SNI,
-- environment proxies are ignored,
-- keep-alive is disabled,
-- response size is bounded,
-- accepted MIME types are restricted,
-- compressed responses are rejected.
-
-This prevents the common unsafe design where code validates one DNS lookup and the HTTP library performs another lookup during connection.
-
-### Extraction boundary
-
-`WebExtractor` statically parses HTML or plain text. It does not execute JavaScript.
-
-Scripts, styles, templates, SVG, canvas, iframes, navigation, footers, asides, and forms are removed from HTML extraction.
-
-Static parsing can still include content that a browser might visually hide with CSS. That content remains untrusted data and is handled by the same downstream containment rules.
-
-### Suspicious-content scanner
-
-`SuspiciousContentScanner` detects a small set of explicit prompt-injection-like patterns, including role impersonation, instruction override attempts, secret-exfiltration requests, internal-network retargeting, tool-use instructions, and provenance manipulation.
-
-It produces `SUSPICIOUS_CONTENT` security events.
-
-It does **not** remove evidence and does **not** make authorization decisions. It is deliberately a monitoring layer because heuristic detection is incomplete and bypassable.
+`ResearchRequest` is untrusted. Pydantic models reject unexpected fields and bound request parameters. Domain filters are validated as domains instead of being passed through as arbitrary search syntax.
 
 ### Planner LLM
 
-The planner sees the caller's question and bounded research constraints. It returns only a `ResearchPlan` containing search queries.
+The planner receives the research question and bounded constraints and may return only a structured `ResearchPlan` containing search queries.
 
-The planner does not receive search, fetch, shell, filesystem, or browser tools.
+It does not receive search, HTTP, browser, shell, filesystem, or arbitrary action tools. Trusted code validates the plan and enforces the search budget.
 
-Trusted code validates the returned plan and applies search budgets.
+### Search provider
 
-### Evidence gatherer
+`SearchProvider` is provider-neutral. Brave-specific request/response handling stays inside the Brave adapter.
 
-`EvidenceGatherer` is trusted orchestration code. It:
+Search results are discovery metadata, not trusted evidence and not a source-quality score. A result URL must still pass the fetch boundary before its contents can become evidence.
 
-- limits searches,
-- limits fetch attempts independently from successful pages,
-- limits successfully fetched pages,
-- limits bytes,
-- deduplicates URLs and content,
-- records provider/fetch/extraction/security events,
-- preserves source/evidence provenance,
-- ranks evidence deterministically for relevance and source diversity,
-- stops early when the selected evidence set is sufficient,
-- otherwise continues until budgets or other configured stopping conditions are reached.
+### Network fetch boundary
 
+`SafeFetcher` owns HTTP(S) authority. Current policy includes:
 
-### Evidence selection and soft stopping
+- HTTP and HTTPS only;
+- ports 80 and 443 only;
+- no URL user information;
+- no single-label/internal-style hostnames;
+- DNS resolution before connection;
+- every resolved address must be globally reachable;
+- mixed public/private answers are rejected;
+- automatic redirects are disabled;
+- every redirect target is fully revalidated;
+- the connection uses an address that trusted code already validated;
+- the original hostname is preserved for HTTP `Host` and TLS SNI;
+- environment proxies are ignored;
+- keep-alive is disabled for this bounded fetch path;
+- allowed content types are restricted;
+- response bodies are bounded.
 
-Hard resource budgets remain the security circuit breakers. A separate deterministic `EvidenceSelector` controls normal research shape without changing those ceilings. It scores evidence using terms from the caller question and planner queries, prefers source diversity, limits the number of retained chunks from one source, and keeps a bounded selected evidence set.
+The validated-address binding matters: validating one DNS lookup and then letting an HTTP client independently resolve the hostname again would reopen a DNS-rebinding/TOCTOU gap.
 
-After each newly extracted source, trusted orchestration evaluates whether the selected set has enough source diversity, relevant chunks, text volume, and question-term coverage to be useful. If so, gathering stops normally without an incompleteness flag. If not, research continues toward the hard budget. This is intentionally heuristic and does not claim semantic completeness; it avoids another LLM call and is allowed to be conservative.
+See [ADR 0003](adr/0003-ssrf-target-validation.md).
 
-Only selected evidence is passed forward to synthesis and semantic verification. Fetch/security events and resource usage still reflect all work performed before stopping.
+### HTTP content decoding
 
-### HTTP compression
+The fetcher advertises `gzip, identity` and consumes the raw response stream itself.
 
-`SafeFetcher` requests `gzip` or identity content and handles gzip itself from the raw response stream. Both compressed bytes and the incrementally decompressed body are bounded, and the per-page limit is enforced against decompressed content before extraction. Invalid, truncated, concatenated, or unsupported encodings fail closed. This prevents transparent client decompression from bypassing resource accounting.
+For gzip responses it bounds both the compressed stream and the decompressed output. The per-page byte limit is applied to decompressed content before extraction. Malformed, truncated, concatenated, and unsupported encodings fail closed.
+
+This avoids relying on transparent client decompression whose resource accounting could differ from the project's own limits.
+
+See [ADR 0007](adr/0007-bounded-http-content-decoding.md).
+
+### Extraction
+
+`WebExtractor` statically parses HTML/plain text and does not execute JavaScript.
+
+Scripts, styles, templates, SVG, canvas, iframes, navigation, footers, asides, and forms are removed from HTML extraction. Static extraction can still include misleading or visually hidden text; all extracted text therefore remains untrusted data.
+
+### Suspicious-content scanner
+
+`SuspiciousContentScanner` flags a small set of explicit attack-like patterns such as role impersonation, instruction overrides, secret-exfiltration requests, network retargeting, tool-use instructions, and provenance manipulation.
+
+A scanner finding becomes a security event. It does **not** remove evidence, authorize anything, or establish that unflagged text is safe. The benchmark intentionally includes attacks the scanner misses and benign text it flags.
+
+See [ADR 0004](adr/0004-indirect-prompt-injection-containment.md).
+
+### Evidence gathering and selection
+
+`EvidenceGatherer` is trusted orchestration code. It owns:
+
+- search issuance;
+- URL deduplication;
+- fetch-attempt and successful-page accounting;
+- extraction;
+- content-hash deduplication;
+- source/evidence provenance;
+- security/fetch/provider events;
+- hard budget enforcement;
+- deterministic evidence selection and early stopping.
+
+Hard budgets are safety circuit breakers. They are deliberately separate from normal research shape.
+
+`EvidenceSelector` provides the soft layer. It scores chunks from question/planner terms, preserves source diversity, limits per-source dominance, bounds selected evidence, and declares a set sufficient only when configured diversity, relevance, text-volume, and question-term coverage thresholds are met.
+
+The current default soft policy is:
+
+- at least 2 selected sources;
+- at least 4 relevant chunks;
+- at least 16,000 selected characters;
+- at least 50% question-term coverage;
+- no more than 8 selected chunks per source;
+- no more than 200,000 selected characters.
+
+This is a heuristic stopping policy, not a semantic completeness claim. If evidence is weak, research may continue toward the hard ceilings.
+
+See [ADR 0006](adr/0006-resource-budgets-and-evidence-sufficiency.md).
 
 ### Synthesizer LLM
 
-The synthesizer receives the user's question plus serialized evidence.
+The synthesizer receives the question plus selected evidence. Evidence is explicitly framed as untrusted data, but security does not rely on the prompt alone: the synthesizer has no tools or network authority.
 
-Its system instruction explicitly treats evidence as untrusted data. More importantly, the model has no tools or network authority.
+The model returns a strict `SynthesisDraft`. Evidence is exposed through short model-facing references such as `E1`; trusted code maps those back to canonical evidence IDs and rejects invented references.
 
-The model returns a strict `SynthesisDraft`, not `Source` or `EvidenceChunk` objects.
-
-Trusted code verifies:
-
-- claim IDs are unique,
-- claim evidence IDs refer only to evidence included in the synthesis context,
-- conflict IDs are unique,
-- conflict claim IDs refer to actual generated claims.
-
-Invented evidence references fail closed.
+The synthesizer cannot create trusted `Source` or `EvidenceChunk` objects.
 
 ### Semantic claim verifier
 
-Reference validation answers "does this evidence ID exist?" but not "does this evidence support this claim?"
+Reference integrity answers "did this claim cite evidence that exists?" It does not answer "does that evidence actually support the claim?"
 
-When configured, `ResearchVerifier` performs a separate structured LLM call after synthesis. For each synthesized claim it receives only:
+`ResearchVerifier` therefore performs a separate structured model call. It receives each claim and only the evidence already cited by that claim. Model-facing identifiers (`Q1`, `E1`, ...) are dynamically constrained by the response schema and are resolved back to canonical IDs by trusted code.
 
-- the claim ID and text,
-- evidence chunks already cited by that claim,
-- provenance metadata for those chunks.
+Trusted validation requires:
 
-The verifier returns `supported`, `partial`, `unsupported`, or `contradicted` plus a confidence value and the subset of cited evidence it believes provides support.
-
-Trusted code then enforces:
-
-- every claim is verified exactly once,
-- no unknown claim IDs,
-- no evidence IDs outside the claim's existing citations,
+- every synthesized claim is verified exactly once;
+- no unknown/duplicate claim reference is accepted;
+- supporting evidence stays inside the claim's original citation set;
 - supported/partial verdicts identify at least one supporting evidence item.
 
-The verifier cannot add authority, sources, URLs, tools, or network actions. It is a quality-control layer, not a security authorization layer and not a formal proof system.
+Verdicts are `supported`, `partial`, `unsupported`, or `contradicted`. This is probabilistic quality control, not formal entailment or independent fact checking.
+
+See [ADR 0005](adr/0005-semantic-claim-verification.md).
 
 ### LLM provider boundary
 
-OpenRouter is behind `LLMProvider`.
+`LLMProvider` keeps provider-specific wire details out of the research core. The included OpenRouter adapter supports plain and JSON-Schema structured requests, normalizes usage/cost metadata, surfaces provider failures, and locally validates structured responses after the provider returns them.
 
-Structured output requests use JSON Schema at the provider and are validated again locally. The provider response model ignores unrelated provider-specific response fields but rejects missing required normalized fields.
+The model is configurable. Core logic must not depend on a particular model reproducing application-internal identifiers; trusted code owns canonical identity and mapping.
 
-### Resource budgets
+See [ADR 0002](adr/0002-provider-abstractions.md).
 
-`ResearchBudget` controls:
+## Resource budgets
 
-- search count,
-- fetch/page attempts,
-- bytes per page,
-- total bytes,
-- redirects,
-- LLM calls,
-- input tokens,
-- output tokens.
+`ResearchBudget` is a hard per-request ceiling. Current defaults are intentionally generous circuit breakers:
 
-Trusted trackers account for usage. A full planner + synthesis + verification run normally requires three LLM calls. If budgets are smaller, the service degrades explicitly and records incomplete/quality reasons rather than silently exceeding them.
+| Resource | Default |
+| --- | ---: |
+| search requests | 10 |
+| fetch attempts | 40 |
+| successful pages | 20 |
+| bytes per page | 5,000,000 |
+| total fetched bytes | 50,000,000 |
+| redirects per fetch | 5 |
+| LLM calls | 10 |
+| cumulative input tokens | 500,000 |
+| cumulative output tokens | 50,000 |
 
-## Authority versus quality
+Fetch attempts and successful pages are separate so blocked/failed responses do not consume the successful-page budget.
 
-The architecture separates three questions:
+Input-token usage is accounted from provider responses, so exact pre-enforcement is limited without a provider/model-specific tokenizer. The system therefore uses trusted cumulative accounting plus bounded per-call behavior and explicit incompleteness/quality flags.
 
-1. **Can hostile content gain authority?**
-2. **Does a citation reference real collected evidence?**
-3. **Does that evidence semantically support the claim?**
+## Authority, provenance, and quality are different questions
 
-The first is addressed with deterministic capability boundaries.
+The architecture keeps three concerns separate:
 
-The second is addressed with trusted provenance/reference validation.
+1. **Authority:** can hostile content cause a forbidden action? Deterministic capability boundaries answer this.
+2. **Provenance:** does a returned citation refer to evidence actually collected and supplied? Trusted reference validation answers this.
+3. **Support:** does cited evidence semantically support the claim? The verifier improves this signal, probabilistically.
 
-The third is improved with a separate semantic verification pass, but remains probabilistic and does not establish real-world truth.
+Collapsing these concerns into one "is this content safe?" classifier would make the security boundary depend on model/detector accuracy.
 
-## Adapters
+## Deployment boundary
 
-The Python API and CLI both call the same `ResearchService`.
+The package assumes the host Python runtime is not already compromised. Sensitive deployments should add independent controls such as restricted egress, process/container isolation, secret management, filesystem restrictions, and resource limits.
 
-The CLI is intentionally thin: it does not perform its own search/fetch logic and therefore does not create a second authority path.
-
-Future REST or MCP adapters must preserve the same property.
-
-## Deployment
-
-Application-level controls should be complemented by deployment controls in production, such as:
-
-- restricted egress,
-- non-root containers,
-- read-only filesystems where possible,
-- no host Docker socket,
-- no unnecessary mounts,
-- resource limits,
-- secret injection through deployment mechanisms rather than files.
-
-Deployment hardening is outside the current Python-core milestone.
+Those deployment controls complement the application design; they are not implemented by this package.

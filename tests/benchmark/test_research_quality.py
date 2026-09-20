@@ -12,7 +12,7 @@ from safe_web_research.domain import (
 )
 
 _ROOT = Path(__file__).resolve().parents[2]
-_CASES = _ROOT / "benchmarks" / "research-quality" / "cases.json"
+_CASES = _ROOT / "benchmarks" / "research_quality" / "cases.json"
 
 
 def test_research_quality_case_matrix_loads_and_is_diverse() -> None:
@@ -110,7 +110,7 @@ def test_research_quality_markdown_states_live_limitations() -> None:
         git_commit="abc123",
         git_dirty=False,
         model="z-ai/glm-5.3-flash",
-        case_file="benchmarks/research-quality/cases.json",
+        case_file="benchmarks/research_quality/cases.json",
         cases=[],
         passed_cases=0,
         total_cases=0,

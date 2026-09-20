@@ -2,248 +2,161 @@
 
 ## Status
 
-M11/M12 threat model for the pre-1.0 standalone research core and CLI.
-
-This document describes security properties implemented and tested in the current codebase. It is not a claim of formal verification or production certification.
+This threat model describes the current pre-1.0 standalone research core and CLI. It documents implemented/tested properties; it is not a formal verification or independent security audit.
 
 ## Security objective
 
-All Internet-derived content is untrusted.
+All Internet-derived content is untrusted. Security must not require the LLM to recognize or resist prompt injection correctly.
 
-Security must not depend on the LLM correctly recognizing or resisting prompt injection.
+Primary invariant:
 
-The primary invariant is:
-
-> If an attacker completely succeeds in manipulating the research LLM, they may influence research quality or correctness, but they must not thereby obtain secrets, internal network access, arbitrary network destinations, filesystem mutation, shell execution, or consequential external actions.
+> If hostile content completely succeeds in influencing a research model, that influence may degrade answer quality, but it must not thereby grant secrets, internal-network access, arbitrary network destinations, filesystem mutation, shell execution, fabricated trusted provenance, or consequential external actions.
 
 ## Assets
 
-- Brave credentials
-- OpenRouter credentials
-- caller-provided data
-- host and internal network
-- cloud metadata endpoints
-- local filesystem
-- research integrity
-- source/evidence provenance
-- cost and resource budgets
+- Brave and OpenRouter credentials;
+- caller-provided data;
+- host/internal network and cloud metadata endpoints;
+- local filesystem/runtime;
+- research integrity;
+- source/evidence provenance;
+- network, token, and provider-cost budgets.
 
 ## Untrusted inputs
 
-- research questions
-- model-generated search queries
-- search results and snippets
-- URLs
-- DNS answers
-- redirect targets
-- HTTP headers
-- HTML and plain text
-- extracted evidence
-- LLM outputs
-- provider error payloads
+- research questions;
+- model-generated search queries;
+- search results/snippets;
+- URLs, DNS answers, redirects, HTTP headers/bodies;
+- HTML/plain text and extracted evidence;
+- LLM outputs;
+- provider error payloads.
 
-## V1 non-goals
+## Current non-goals
 
-V1 does not provide:
+The project does not provide:
 
-- browser automation,
-- JavaScript execution,
-- website authentication,
-- arbitrary page interaction,
-- file downloads outside bounded text fetching,
-- shell access,
-- filesystem mutation,
-- email or messaging actions,
-- persistent memory,
-- arbitrary external tools,
-- high-impact autonomous actions.
+- browser automation or JavaScript execution;
+- authenticated website interaction;
+- arbitrary file downloads outside bounded text fetching;
+- shell or filesystem mutation;
+- email/messaging/consequential external actions;
+- persistent memory;
+- arbitrary external tools;
+- protection from a compromised host/Python runtime.
+
+Adding any of those capabilities would require a new threat-model/ADR review rather than being treated as an ordinary adapter change.
 
 ## Threats and controls
 
 ### Indirect prompt injection
 
-**Scenario:** A fetched page contains instructions such as fake system/developer messages, requests to ignore previous instructions, secret-exfiltration commands, or tool-use directions.
+**Scenario:** fetched content contains fake system/developer messages, instruction overrides, secret requests, tool commands, or policy claims aimed at the model.
 
 **Primary controls:**
 
-- the synthesizer has no tools,
-- evidence is serialized as data,
-- trusted orchestration owns all network actions,
-- synthesis output is constrained to a strict schema,
-- invented evidence IDs are rejected.
+- planner/synthesizer/verifier have no arbitrary tools;
+- external actions remain in trusted orchestration;
+- model output is schema constrained and locally validated;
+- canonical claim/evidence identity remains in trusted code;
+- unexpected action/provenance fields fail validation.
 
-**Defense in depth:**
+**Defense in depth:** static extraction removes common non-content elements and the heuristic scanner emits suspicious-content events.
 
-- static HTML extraction removes script/style and several non-content elements,
-- a heuristic scanner records explicit suspicious patterns,
-- adversarial fixtures exercise hidden-text and instruction-like content.
-
-**Residual risk:** An injected page can still influence the natural-language model and therefore research quality. The scanner is incomplete and must not be treated as an authorization control.
+**Residual risk:** hostile evidence can still influence wording, source choice, and factual quality. Scanner misses do not weaken the authority boundary.
 
 ### Tool abuse / excessive agency
 
-**Scenario:** Hostile evidence instructs the model to browse another URL, execute a command, or use a tool.
+**Scenario:** hostile text tells a model to fetch another URL, execute a command, read a file, or perform a new action.
 
-**Controls:**
-
-- planner and synthesizer receive no tools,
-- `SynthesisDraft` has no action fields,
-- strict Pydantic models reject extra output fields,
-- network calls occur only through trusted gatherer/fetcher code.
+**Controls:** those capabilities are not available to the research models. Network calls occur through the trusted search/fetch path only.
 
 ### SSRF and cloud metadata access
 
-**Scenario:** A search result or redirect attempts to reach loopback, RFC1918/private space, link-local addresses, CGNAT, IPv6 local addresses, or cloud metadata.
+**Scenario:** search results or redirects target loopback/private/link-local/shared/reserved destinations or cloud metadata.
 
-**Controls:**
+**Controls:** scheme/port policy, hostname validation, pre-connection DNS resolution, all-address globality requirement, rejection of mixed DNS answers, validated-address pinning, manual redirect validation, and `trust_env=False`.
 
-- URL scheme/port restrictions,
-- DNS resolution before connection,
-- all resolved addresses must be global,
-- mixed public/private DNS answers are rejected,
-- connection is pinned to validated addresses,
-- redirects are manual and fully revalidated,
-- automatic environment proxies are disabled.
+### DNS rebinding / validation-to-connection TOCTOU
 
-### DNS rebinding / TOCTOU
+**Scenario:** a hostname resolves publicly during validation but privately when the HTTP client connects.
 
-**Scenario:** A hostname resolves to a public address during validation and a private address when the HTTP library connects.
+**Control:** the request connects to an already-validated address while preserving the logical hostname for `Host` and TLS SNI.
 
-**Controls:**
+### Compressed-content resource amplification
 
-- trusted code resolves and validates addresses,
-- the HTTP request connects to the validated address rather than asking the client to resolve the hostname again,
-- original hostname is preserved for HTTP `Host` and TLS SNI.
+**Scenario:** a small compressed response expands beyond the intended page/resource budget or contains malformed/ambiguous gzip streams.
+
+**Controls:** raw gzip is decoded incrementally by trusted code; compressed and decompressed bytes are bounded; the page limit applies to decompressed content; truncated/concatenated/malformed gzip and unsupported encodings fail closed.
 
 ### Secret exfiltration
 
-**Scenario:** External content asks the model to reveal credentials or encode them into another request.
+**Scenario:** external content asks the model to disclose provider credentials or encode them into a request.
 
-**Controls:**
+**Controls:** credentials stay inside provider adapters; research models have no generic network/action tool; fetch requests do not carry LLM/search credentials; `.env` is local-only.
 
-- credentials are held by provider adapters, not evidence,
-- synthesizer has no network or tool authority,
-- fetch requests contain no LLM/provider credentials,
-- `.env` is local-only,
-- suspicious explicit exfiltration text is observable.
+**Residual risk:** the caller's question and selected evidence are sent to the configured LLM provider. Do not submit secrets if provider disclosure is unacceptable.
 
-**Residual risk:** Caller questions and evidence are sent to the configured LLM provider. Do not place secrets into research questions or source content if provider disclosure is unacceptable.
+### Citation/provenance poisoning
 
-### Citation / provenance poisoning
+**Scenario:** hostile content asks a model to invent evidence/source IDs or cite attacker-selected provenance.
 
-**Scenario:** Hostile content tells the model to invent evidence IDs or cite attacker-controlled provenance.
+**Controls:** trusted code creates `Source`/`EvidenceChunk`; models only return short references; references are resolved against the exact trusted context; unknown references and extra fields fail closed.
 
-**Controls:**
+### Unsupported claims with valid citations
 
-- `Source` and `EvidenceChunk` objects are created by trusted code,
-- synthesizer output can reference IDs but cannot create trusted evidence,
-- every returned evidence ID is checked against the exact evidence set sent to synthesis,
-- unknown evidence IDs fail closed,
-- extra action/provenance output fields fail schema validation.
+**Scenario:** a claim cites real evidence but overstates, combines, or contradicts it.
 
-**Additional control:** When `ResearchVerifier` is configured, each synthesized claim is checked in a separate structured LLM call against only the evidence chunks already cited by that claim. Trusted code validates verifier claim IDs and supporting evidence IDs. Unsupported or contradicted claims are surfaced as quality flags.
+**Control:** the optional/default verifier checks each claim against only its already-cited evidence and surfaces `supported`, `partial`, `unsupported`, or `contradicted`.
 
-**Residual risk:** Semantic verification is probabilistic. A verifier can misclassify support, and a supported claim can still be false if the source itself is false. The verifier does not establish truth or formal entailment.
+**Residual risk:** semantic verification is probabilistic and sources themselves may be false. A `supported` verdict does not establish objective truth.
 
 ### Resource exhaustion / denial of wallet
 
-**Scenario:** Queries, redirects, pages, large bodies, or repeated model calls exhaust compute or API budgets.
+**Scenario:** excessive searches, fetches, redirects, large bodies, decompression, evidence accumulation, or model calls consume resources/cost.
 
-**Controls:**
+**Controls:** hard limits on searches, fetch attempts, successful pages, per-page/total bytes, redirects, LLM calls, input/output tokens; deterministic evidence selection/early stopping; repeated-no-evidence stopping.
 
-- maximum searches,
-- separate maximum fetch attempts and successfully fetched pages,
-- per-page and total byte caps,
-- gzip decompression with bounded compressed and decompressed streams,
-- redirect caps,
-- model-call caps,
-- output-token caps,
-- tracked input-token usage,
-- deterministic soft evidence selection/sufficiency stopping,
-- stopping after repeated no-evidence queries.
+**Residual risk:** provider input-token usage is known precisely only after a call without model-specific local tokenization.
 
-**Residual risk:** Provider-side token accounting is reported after a call, so an input-token budget cannot be perfectly pre-enforced without a model-specific tokenizer.
+### Malformed/adversarial provider responses
 
-### Malformed or adversarial provider responses
+**Scenario:** a provider returns invalid JSON, unexpected fields, truncated structured output, unsupported parameters, or malformed data.
 
-**Scenario:** Search or LLM providers return unexpected fields, invalid JSON, malformed structured output, or unsupported data.
+**Controls:** provider-specific wire handling, normalized internal models, JSON Schema for structured output, local Pydantic validation, typed provider errors, and trusted identifier resolution.
 
-**Controls:**
+### Misinformation / source manipulation
 
-- provider-specific wire models,
-- normalized internal models,
-- Pydantic strict models,
-- JSON Schema validation for structured LLM output,
-- typed provider errors.
+**Scenario:** sources are false, stale, SEO-manipulated, duplicated, or mutually inconsistent.
 
-### Misinformation and source manipulation
+**Controls:** provenance preservation, content-hash deduplication, domain/freshness filters, conflict representation, and semantic claim-support verification.
 
-**Scenario:** Search results or fetched sources are false, stale, SEO-manipulated, duplicated, or mutually inconsistent.
+**Residual risk:** search rank is not source trust. The project does not currently perform authoritative-source scoring or independent corroboration beyond gathered evidence.
 
-**Controls currently present:**
+### CLI credential/authority surface
 
-- provenance preservation,
-- content-hash deduplication,
-- conflict representation,
-- domain allow/block filters,
-- freshness controls.
+**Scenario:** convenience code bypasses the core policy or exposes API keys in command history.
 
-**Residual risk:** Search rank is not source trust. V1 performs semantic claim-support verification when configured, but does not yet implement authoritative-source scoring or independent fact checking against sources outside the gathered evidence.
-
-### CLI credential and authority surface
-
-**Scenario:** A convenience CLI accidentally creates a second code path that bypasses budgets/fetch policy, or exposes API keys in shell history.
-
-**Controls:**
-
-- the CLI constructs and calls the same `ResearchService`,
-- it does not contain independent network-fetch logic,
-- API keys are read from environment variables rather than accepted as CLI flags,
-- all domain and budget inputs still pass through strict domain models.
-
-**Residual risk:** Environment variables can still be exposed by a compromised local process or shell environment. The CLI does not provide secret-management isolation.
+**Controls:** CLI uses the same `ResearchService`; API keys come from environment variables rather than command-line options; request/domain/budget validation remains in core models.
 
 ## Security-event semantics
 
-`SecurityEvent` records conditions observed during research.
+`SecurityEvent` is observability, not a verdict system. In particular, `SUSPICIOUS_CONTENT` means a heuristic rule matched. It neither proves an attack nor establishes that unflagged content is benign.
 
-A `SUSPICIOUS_CONTENT` event means a heuristic rule matched external content. It does not mean an attack was proven, and absence of the event does not mean content is safe.
+## Security regression evidence
 
-Security events are intended for observability, evaluation, and later policy layers.
-
-## Adversarial regression suite
-
-Current adversarial scenarios include:
-
-- indirect prompt injection embedded in HTML,
-- fake system/developer messages,
-- hidden CSS content,
-- requests to fetch cloud metadata,
-- requests to disclose API keys,
-- provenance/citation manipulation,
-- a simulated compromised model inventing evidence IDs,
-- a simulated compromised model emitting an action field,
-- redirect-based SSRF to link-local metadata addresses.
-
-Run:
+Adversarial tests cover prompt injection, role impersonation, secret requests, metadata/SSRF attempts, provenance manipulation, invented references, unexpected action fields, and redirect attacks.
 
 ```bash
 uv run pytest -m adversarial -v
 ```
 
+The deterministic [security benchmark](../benchmarks/security/README.md) goes further by assuming the model is already compromised and comparing which forbidden actions the surrounding architectures permit.
+
 ## Deployment assumptions
 
-The Python implementation assumes the host runtime itself is not compromised.
-
-For sensitive deployments, pair application controls with independent network egress controls, process/container isolation, secret management, resource limits, and monitoring.
+For sensitive deployment, pair application controls with independent egress policy, process/container isolation, secret management, filesystem restrictions, resource limits, and monitoring.
 
 ## References
 
-The design is informed by OWASP guidance on:
-
-- LLM prompt injection prevention,
-- AI agent security and least privilege,
-- SSRF prevention,
-- structured adversarial testing.
-
-The architecture intentionally treats model-based detection as defense in depth rather than the primary authorization boundary.
+The design is informed by OWASP guidance on prompt injection, AI-agent least privilege, SSRF prevention, and adversarial testing. The project deliberately treats attack detection as defense in depth rather than the primary authorization boundary.

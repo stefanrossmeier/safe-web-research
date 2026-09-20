@@ -7,14 +7,14 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
-from benchmarks.security_benchmark.models import BenchmarkSuite
-from benchmarks.security_benchmark.reporting import write_run
-from benchmarks.security_benchmark.runner import run_suite
+from benchmarks.security.models import BenchmarkSuite
+from benchmarks.security.reporting import write_run
+from benchmarks.security.runner import run_suite
 
-_ROOT = Path(__file__).resolve().parents[1]
+_ROOT = Path(__file__).resolve().parents[2]
 
-_DEFAULT_CASES = _ROOT / "benchmarks" / "cases" / "security_containment.json"
-_DEFAULT_OUTPUT = _ROOT / "benchmarks" / "results"
+_DEFAULT_CASES = Path(__file__).with_name("cases.json")
+_DEFAULT_OUTPUT = _ROOT / "reports" / "security_benchmark"
 
 
 def _git_state() -> tuple[str | None, bool | None]:

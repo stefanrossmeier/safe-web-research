@@ -2,7 +2,7 @@
 
 ## Project status
 
-`safe-web-research` is currently a pre-1.0 reference implementation. It is designed to make important security boundaries explicit and testable, but it has not undergone an independent security audit.
+`safe-web-research` is a pre-1.0 reference implementation. It makes important security boundaries explicit and testable, but it has not undergone an independent security audit.
 
 ## Reporting a vulnerability
 
@@ -12,26 +12,24 @@ Prefer GitHub private vulnerability reporting / a private security advisory when
 
 A useful report includes:
 
-- affected commit or version,
-- threat scenario,
-- minimal reproduction,
-- expected security invariant,
-- observed behavior,
-- whether real credentials or external systems were involved.
+- affected commit/version;
+- threat scenario;
+- minimal reproduction;
+- expected security invariant;
+- observed behavior;
+- whether real credentials/external systems were involved.
 
 ## Security invariants
 
-The project is designed around these invariants:
-
-- Fetched web content does not receive direct network, shell, filesystem, or arbitrary tool authority.
-- The research synthesizer has no tools.
-- Fetch targets are validated independently of LLM decisions.
-- Redirect targets are revalidated.
-- Non-global IP destinations are rejected.
-- Claims returned by synthesis may reference only evidence IDs created by trusted code.
-- Semantic verification may reference only claim IDs and evidence IDs already present in the trusted result graph.
+- Fetched web content does not receive direct network, shell, filesystem, secret, or arbitrary-action authority.
+- Planner/synthesizer/verifier models receive no arbitrary tools.
+- Fetch targets and redirects are validated independently of model intent.
+- Non-global network destinations are rejected and connections are pinned to validated addresses.
+- Compressed response handling is explicitly bounded on decompressed output.
+- Canonical source/evidence/claim identity is owned by trusted code.
+- Model references are accepted only when they resolve to the supplied trusted context.
 - Structured LLM output is schema-validated locally.
-- Resource budgets are enforced by trusted code.
+- Hard resource budgets are enforced by trusted code.
 - Suspicious-content detection is diagnostic only and is not required for containment.
 
 A violation of one of these invariants is security-relevant even if the final natural-language answer looks harmless.
@@ -40,58 +38,43 @@ A violation of one of these invariants is security-relevant even if the final na
 
 Never commit:
 
-- `.env`,
-- Brave API keys,
-- OpenRouter API keys,
-- provider credentials,
-- production URLs containing secrets,
-- captured headers containing authorization tokens.
+- `.env`;
+- Brave/OpenRouter credentials;
+- production URLs containing secrets;
+- captured authorization headers/tokens.
 
-Live tests and the CLI read credentials from environment variables and are excluded from deterministic test runs. The CLI intentionally does not accept API keys as command-line options.
+Live tests and the CLI read credentials from environment variables. The CLI intentionally does not accept API keys as command-line options.
 
 ## Threats explicitly considered
 
-The current threat model covers:
-
-- indirect prompt injection from web content,
-- prompt/role impersonation inside evidence,
-- secret-exfiltration instructions,
-- SSRF,
-- DNS rebinding / validation-to-connection gaps,
-- redirect-based SSRF bypasses,
-- cloud metadata access,
-- fabricated evidence or citations,
-- malicious structured LLM output,
-- unbounded resource consumption,
-- provider failures and malformed responses.
-
-See `docs/threat-model.md`.
+The current [Threat Model](docs/threat-model.md) covers indirect prompt injection, excessive agency/tool abuse, SSRF/cloud metadata, DNS rebinding, compressed-content amplification, secret exfiltration, provenance poisoning, unsupported claims, denial of wallet/resource exhaustion, malformed provider responses, source misinformation, and the CLI authority surface.
 
 ## Important non-guarantees
 
 The project does not guarantee:
 
-- factual correctness of web sources or answers,
-- perfect prompt-injection detection,
-- formal semantic entailment or objective truth, even when the verifier returns `supported`,
-- protection against a compromised host or Python runtime,
-- protection equivalent to deployment-level egress filtering or sandboxing,
-- availability of third-party providers,
+- factual correctness of sources/answers;
+- perfect prompt-injection detection;
+- formal semantic entailment or objective truth;
+- protection from a compromised host/Python runtime;
+- deployment-level egress/sandbox isolation;
+- third-party provider availability/security;
 - suitability for high-impact autonomous actions.
 
-The V1 architecture intentionally exposes no consequential external-action tools.
+The current architecture intentionally exposes no consequential external-action tools.
 
 ## Testing security changes
 
-Changes to fetching, DNS policy, redirects, extraction, model prompts, structured schemas, citations, budgets, or external-content handling should include an adversarial regression test.
-
-Run:
+Run the standard no-cost gate:
 
 ```bash
-uv run ruff check .
-uv run mypy src
-uv run pytest -m "not live" -q
-uv run pytest -m adversarial -v
+uv run python scripts/check.py
 ```
 
-Live tests are useful before release but are not a substitute for deterministic security tests.
+For the deterministic compromised-model benchmark (no API keys/network):
+
+```bash
+uv run python -m benchmarks.security
+```
+
+Live tests are useful before release but do not replace deterministic security regression coverage.

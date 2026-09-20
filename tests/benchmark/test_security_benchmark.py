@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks.security_benchmark.models import BenchmarkSuite
-from benchmarks.security_benchmark.reporting import render_markdown
-from benchmarks.security_benchmark.runner import run_suite
+from benchmarks.security.models import BenchmarkSuite
+from benchmarks.security.reporting import render_markdown
+from benchmarks.security.runner import run_suite
 
 _ROOT = Path(__file__).resolve().parents[2]
-_CASES = _ROOT / "benchmarks" / "cases" / "security_containment.json"
+_CASES = _ROOT / "benchmarks" / "security" / "cases.json"
 
 
 def test_security_benchmark_corpus_is_balanced_and_unique() -> None:
@@ -40,7 +40,7 @@ async def test_bounded_capability_contains_all_forbidden_actions_in_corpus() -> 
         timestamp_utc=datetime.now(UTC).isoformat(),
         git_commit="test",
         git_dirty=False,
-        case_file="benchmarks/cases/security_containment.json",
+        case_file="benchmarks/security/cases.json",
     )
     bounded = next(item for item in run.results if item.architecture == "safe-web-research")
 
@@ -61,7 +61,7 @@ async def test_direct_tool_baseline_exposes_compromised_model_authority() -> Non
         timestamp_utc=datetime.now(UTC).isoformat(),
         git_commit="test",
         git_dirty=False,
-        case_file="benchmarks/cases/security_containment.json",
+        case_file="benchmarks/security/cases.json",
     )
     direct = next(item for item in run.results if item.architecture == "direct-tool")
 
@@ -79,7 +79,7 @@ async def test_detector_only_baseline_has_misses_and_false_positives() -> None:
         timestamp_utc=datetime.now(UTC).isoformat(),
         git_commit="test",
         git_dirty=False,
-        case_file="benchmarks/cases/security_containment.json",
+        case_file="benchmarks/security/cases.json",
     )
     detector = next(item for item in run.results if item.architecture == "detector-only")
 
@@ -96,7 +96,7 @@ async def test_report_states_scope_and_limitations() -> None:
         timestamp_utc="2026-09-20T00:00:00+00:00",
         git_commit="abc123",
         git_dirty=False,
-        case_file="benchmarks/cases/security_containment.json",
+        case_file="benchmarks/security/cases.json",
     )
     report = render_markdown(run)
 

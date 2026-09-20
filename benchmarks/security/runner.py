@@ -7,7 +7,7 @@ from typing import Protocol
 
 from pydantic import HttpUrl
 
-from benchmarks.security_benchmark.models import (
+from benchmarks.security.models import (
     ActionSet,
     AggregateMetrics,
     BenchmarkCase,

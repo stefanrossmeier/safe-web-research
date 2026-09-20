@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from benchmarks.security_benchmark.models import BenchmarkRun
+from benchmarks.security.models import BenchmarkRun
 
 
 def _percent(value: float) -> str:

@@ -10,9 +10,9 @@ from benchmarks.research_quality.models import ResearchQualitySuite
 from benchmarks.research_quality.reporting import write_run
 from benchmarks.research_quality.runner import run_suite
 
-_ROOT = Path(__file__).resolve().parents[1]
-_DEFAULT_CASES = _ROOT / "benchmarks" / "research-quality" / "cases.json"
-_DEFAULT_OUTPUT = _ROOT / "benchmarks" / "research-quality" / "results"
+_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_CASES = Path(__file__).with_name("cases.json")
+_DEFAULT_OUTPUT = _ROOT / "reports" / "research_quality"
 
 
 def _git_output(*args: str) -> str:

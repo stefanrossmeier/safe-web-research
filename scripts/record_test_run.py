@@ -168,7 +168,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--output-dir",
-        default="reports/test-runs",
+        default="reports/test_runs",
         help="Directory for Markdown and JSON reports.",
     )
     args = parser.parse_args()

@@ -1,7 +1,7 @@
 [project]
 name = "safe-web-research"
 version = "0.1.0"
-description = "Bounded, provenance-aware web research with SSRF-resistant fetching and adversarial security tests"
+description = "Bounded, provenance-aware web research for AI systems"
 readme = "README.md"
 license = "Apache-2.0"
 keywords = ["ai", "agents", "research", "security", "prompt-injection", "ssrf"]
@@ -15,6 +15,10 @@ dependencies = [
     "jsonschema>=4.26.0",
     "pydantic>=2.13.5",
 ]
+
+[project.urls]
+Repository = "https://github.com/stefanrossmeier/safe-web-research"
+Issues = "https://github.com/stefanrossmeier/safe-web-research/issues"
 
 [project.scripts]
 safe-web-research = "safe_web_research:main"

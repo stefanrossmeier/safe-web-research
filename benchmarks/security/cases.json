@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Deterministic M14 corpus for comparing authority containment after hostile content has influenced model behavior.",
+  "description": "Deterministic corpus for comparing authority containment after hostile content has influenced model behavior.",
   "cases": [
     {
       "case_id": "benign-public-search",

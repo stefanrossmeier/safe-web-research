@@ -22,7 +22,7 @@ from safe_web_research.research import (
 )
 from safe_web_research.search import FakeSearchProvider
 
-_FIXTURE = Path(__file__).parents[2] / "fixtures" / "adversarial" / "indirect_prompt_injection.html"
+_FIXTURE = Path(__file__).parents[1] / "fixtures" / "adversarial" / "indirect_prompt_injection.html"
 
 
 @pytest.mark.adversarial
