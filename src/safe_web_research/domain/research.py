@@ -48,6 +48,32 @@ class Claim(StrictModel):
 
     confidence: float = Field(ge=0.0, le=1.0)
 
+    @field_validator("evidence_ids")
+    @classmethod
+    def normalize_evidence_ids(
+        cls,
+        values: list[str],
+    ) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+
+        for value in values:
+            cleaned = value.strip()
+
+            if not cleaned:
+                raise ValueError("evidence IDs must not be empty")
+
+            if cleaned in seen:
+                continue
+
+            seen.add(cleaned)
+            normalized.append(cleaned)
+
+        if not normalized:
+            raise ValueError("claim must contain at least one evidence ID")
+
+        return normalized
+
 
 class Conflict(StrictModel):
     """Represents materially conflicting claims or source evidence."""
@@ -57,6 +83,21 @@ class Conflict(StrictModel):
     description: str = Field(min_length=1)
 
     claim_ids: list[str] = Field(min_length=2)
+
+
+class SynthesisDraft(StrictModel):
+    """Structured answer draft proposed from already collected evidence."""
+
+    answer: str = Field(min_length=1)
+
+    claims: list[Claim] = Field(
+        min_length=1,
+        max_length=100,
+    )
+
+    conflicts: list[Conflict] = Field(
+        max_length=50,
+    )
 
 
 class ResearchResult(StrictModel):

@@ -15,6 +15,7 @@ from safe_web_research.domain.research import (
     ResearchPlan,
     ResearchRequest,
     ResearchResult,
+    SynthesisDraft,
 )
 from safe_web_research.domain.search import SearchRequest, SearchResult
 from safe_web_research.domain.security import (
@@ -48,4 +49,5 @@ __all__ = [
     "SecurityEventType",
     "SecuritySeverity",
     "Source",
+    "SynthesisDraft",
 ]
