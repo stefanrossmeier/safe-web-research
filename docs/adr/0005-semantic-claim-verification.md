@@ -20,7 +20,7 @@ For each claim, the verifier receives only:
 - short model-facing references for evidence already cited by that claim;
 - the cited evidence and provenance metadata.
 
-The response schema is dynamically constrained to the references actually supplied. Trusted Python maps those references back to canonical claim/evidence IDs.
+The response schema is dynamically constrained to the references actually supplied. The model returns a `verifications` object keyed by the short claim references (`Q1`, `Q2`, ...); each claim key has its own schema whose supporting-evidence enum contains only evidence cited by that claim. The model therefore cannot select another claim's evidence while remaining schema-valid. Trusted Python maps the short references back to canonical claim/evidence IDs and repeats the subset check after parsing as defense in depth.
 
 The verifier returns one verdict per claim: `supported`, `partial`, `unsupported`, or `contradicted`.
 
@@ -37,6 +37,6 @@ Unsupported/contradicted claims remain visible and become quality signals rather
 
 Verification costs an additional LLM call and remains probabilistic. It improves semantic citation observability but is not formal entailment, source truth validation, or independent fact checking.
 
-Short model-facing references improve compatibility and reduce identifier-copy errors while canonical identity remains under trusted control.
+Claim-keyed structured output avoids asking models to reproduce claim identifiers inside array items, while per-claim evidence enums reduce cross-claim citation mistakes. Short model-facing references improve compatibility while canonical identity remains under trusted control.
 
 The verifier has no tools/network authority and therefore does not expand the capability boundary.

@@ -120,15 +120,14 @@ async def test_research_service_verifies_synthesized_claims() -> None:
             LLMResponse(
                 content=json.dumps(
                     {
-                        "verifications": [
-                            {
-                                "claim_id": "Q1",
+                        "verifications": {
+                            "Q1": {
                                 "verdict": "supported",
                                 "confidence": 0.99,
                                 "supporting_evidence_ids": ["E1"],
                                 "explanation": ("The evidence directly supports the claim."),
                             }
-                        ]
+                        }
                     }
                 ),
                 model="fake-verifier",
@@ -237,15 +236,14 @@ async def test_research_service_surfaces_unsupported_claims() -> None:
             LLMResponse(
                 content=json.dumps(
                     {
-                        "verifications": [
-                            {
-                                "claim_id": "Q1",
+                        "verifications": {
+                            "Q1": {
                                 "verdict": "unsupported",
                                 "confidence": 0.95,
                                 "supporting_evidence_ids": [],
                                 "explanation": "The evidence does not establish it.",
                             }
-                        ]
+                        }
                     }
                 ),
                 model="fake-verifier",

@@ -75,9 +75,8 @@ async def test_verifier_accepts_grounded_support_and_preserves_claim_order() -> 
             LLMResponse(
                 content=json.dumps(
                     {
-                        "verifications": [
-                            {
-                                "claim_id": "Q1",
+                        "verifications": {
+                            "Q1": {
                                 "verdict": "supported",
                                 "confidence": 0.98,
                                 "supporting_evidence_ids": [
@@ -86,7 +85,7 @@ async def test_verifier_accepts_grounded_support_and_preserves_claim_order() -> 
                                 ],
                                 "explanation": ("The cited evidence directly states the claim."),
                             }
-                        ]
+                        }
                     }
                 ),
                 model="fake-verifier",
@@ -126,13 +125,14 @@ async def test_verifier_accepts_grounded_support_and_preserves_claim_order() -> 
     assert "evidence-2" not in sent.messages[1].content
 
     assert sent.response_schema is not None
-    definitions = sent.response_schema["$defs"]
-    claim_verification = definitions["ClaimVerification"]
-    properties = claim_verification["properties"]
-    assert properties["claim_id"]["enum"] == ["Q1"]
-    assert properties["supporting_evidence_ids"]["items"]["enum"] == ["E1"]
-    assert sent.response_schema["properties"]["verifications"]["minItems"] == 1
-    assert sent.response_schema["properties"]["verifications"]["maxItems"] == 1
+    verifications_schema = sent.response_schema["properties"]["verifications"]
+    assert verifications_schema["required"] == ["Q1"]
+    assert verifications_schema["additionalProperties"] is False
+
+    q1_schema = verifications_schema["properties"]["Q1"]
+    assert "claim_id" not in q1_schema["properties"]
+    supporting_items = q1_schema["properties"]["supporting_evidence_ids"]["items"]
+    assert supporting_items["enum"] == ["E1"]
 
 
 @pytest.mark.asyncio
@@ -142,15 +142,14 @@ async def test_verifier_rejects_unknown_claim_id() -> None:
             LLMResponse(
                 content=json.dumps(
                     {
-                        "verifications": [
-                            {
-                                "claim_id": "Q99",
+                        "verifications": {
+                            "Q99": {
                                 "verdict": "supported",
                                 "confidence": 0.9,
                                 "supporting_evidence_ids": ["evidence-1"],
                                 "explanation": "Invented claim reference.",
                             }
-                        ]
+                        }
                     }
                 ),
                 model="fake",
@@ -184,22 +183,20 @@ async def test_verifier_rejects_supporting_evidence_not_cited_by_claim() -> None
             LLMResponse(
                 content=json.dumps(
                     {
-                        "verifications": [
-                            {
-                                "claim_id": "Q1",
+                        "verifications": {
+                            "Q1": {
                                 "verdict": "supported",
                                 "confidence": 0.9,
                                 "supporting_evidence_ids": ["E2"],
                                 "explanation": "Wrong citation.",
                             },
-                            {
-                                "claim_id": "Q2",
+                            "Q2": {
                                 "verdict": "supported",
                                 "confidence": 0.9,
                                 "supporting_evidence_ids": ["E2"],
                                 "explanation": "Correct citation for claim 2.",
                             },
-                        ]
+                        }
                     }
                 ),
                 model="fake",
@@ -218,6 +215,14 @@ async def test_verifier_rejects_supporting_evidence_not_cited_by_claim() -> None
             max_output_tokens=500,
         )
 
+    sent = llm.requests[0]
+    assert sent.response_schema is not None
+    verification_schemas = sent.response_schema["properties"]["verifications"]["properties"]
+    q1_items = verification_schemas["Q1"]["properties"]["supporting_evidence_ids"]["items"]
+    q2_items = verification_schemas["Q2"]["properties"]["supporting_evidence_ids"]["items"]
+    assert q1_items["enum"] == ["E1"]
+    assert q2_items["enum"] == ["E2"]
+
 
 @pytest.mark.asyncio
 async def test_verifier_requires_supporting_evidence_for_supported_verdict() -> None:
@@ -226,15 +231,14 @@ async def test_verifier_requires_supporting_evidence_for_supported_verdict() -> 
             LLMResponse(
                 content=json.dumps(
                     {
-                        "verifications": [
-                            {
-                                "claim_id": "Q1",
+                        "verifications": {
+                            "Q1": {
                                 "verdict": "supported",
                                 "confidence": 0.8,
                                 "supporting_evidence_ids": [],
                                 "explanation": "No actual evidence selected.",
                             }
-                        ]
+                        }
                     }
                 ),
                 model="fake",

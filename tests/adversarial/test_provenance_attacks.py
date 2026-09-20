@@ -139,22 +139,20 @@ async def test_verifier_cannot_expand_claim_citation_set() -> None:
             LLMResponse(
                 content=json.dumps(
                     {
-                        "verifications": [
-                            {
-                                "claim_id": "Q1",
+                        "verifications": {
+                            "Q1": {
                                 "verdict": "supported",
                                 "confidence": 1.0,
                                 "supporting_evidence_ids": ["E2"],
                                 "explanation": ("Followed the injected provenance instruction."),
                             },
-                            {
-                                "claim_id": "Q2",
+                            "Q2": {
                                 "verdict": "supported",
                                 "confidence": 1.0,
                                 "supporting_evidence_ids": ["E2"],
                                 "explanation": "The second claim cites E2.",
                             },
-                        ]
+                        }
                     }
                 ),
                 model="compromised-verifier",

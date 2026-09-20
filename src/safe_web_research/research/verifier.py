@@ -61,6 +61,7 @@ class ResearchVerifier:
             payload,
             claim_refs,
             evidence_refs,
+            claim_evidence_refs,
         ) = self._build_payload(
             claims,
             evidence_bundle,
@@ -68,7 +69,7 @@ class ResearchVerifier:
 
         response_schema = self._build_response_schema(
             claim_refs=claim_refs,
-            evidence_refs=evidence_refs,
+            claim_evidence_refs=claim_evidence_refs,
         )
 
         llm_request = LLMRequest(
@@ -84,10 +85,10 @@ class ResearchVerifier:
                         "Judge only semantic support. The payload contains "
                         "claims that use short model-facing claim_id and "
                         "evidence_id references plus a deduplicated evidence "
-                        "collection. Return exactly one verification per supplied "
-                        "claim_id and copy those identifiers exactly. "
-                        "supporting_evidence_ids may contain only evidence IDs "
-                        "already cited by that claim. "
+                        "collection. Return a verifications object keyed by the "
+                        "supplied short claim references. Do not invent or omit "
+                        "claim keys. supporting_evidence_ids may contain only "
+                        "evidence IDs already cited by that claim. "
                         "Use verdict supported only when the cited evidence directly "
                         "supports the material factual content of the claim; use "
                         "partial when only part is supported, unsupported when the "
@@ -118,15 +119,16 @@ class ResearchVerifier:
                 f"Research verification LLM call failed: {exc}"
             ) from exc
 
-        try:
-            draft = VerificationDraft.model_validate_json(response.content)
-        except ValidationError as exc:
-            raise ResearchVerificationError("Research verifier returned an invalid draft") from exc
+        draft = self._parse_response(
+            response.content,
+            claim_refs=claim_refs,
+        )
 
         draft = self._resolve_refs(
             draft,
             claim_refs=claim_refs,
             evidence_refs=evidence_refs,
+            claim_evidence_refs=claim_evidence_refs,
         )
 
         self._validate_output(
@@ -149,7 +151,12 @@ class ResearchVerifier:
         self,
         claims: list[Claim],
         evidence_bundle: EvidenceBundle,
-    ) -> tuple[str, dict[str, str], dict[str, str]]:
+    ) -> tuple[
+        str,
+        dict[str, str],
+        dict[str, str],
+        dict[str, list[str]],
+    ]:
         evidence_by_id = {chunk.chunk_id: chunk for chunk in evidence_bundle.evidence}
         sources_by_id = {source.source_id: source for source in evidence_bundle.sources}
 
@@ -158,6 +165,7 @@ class ResearchVerifier:
         claim_refs: dict[str, str] = {}
         evidence_refs: dict[str, str] = {}
         evidence_ref_by_id: dict[str, str] = {}
+        claim_evidence_refs_by_claim: dict[str, list[str]] = {}
 
         for claim_index, claim in enumerate(claims, start=1):
             claim_ref = f"Q{claim_index}"
@@ -205,6 +213,7 @@ class ResearchVerifier:
                     "evidence_ids": claim_evidence_refs,
                 }
             )
+            claim_evidence_refs_by_claim[claim_ref] = claim_evidence_refs
 
         payload: dict[str, object] = {
             "claims": claim_entries,
@@ -223,60 +232,135 @@ class ResearchVerifier:
                 "Claim verification evidence exceeds the configured limit"
             )
 
-        return serialized, claim_refs, evidence_refs
+        return (
+            serialized,
+            claim_refs,
+            evidence_refs,
+            claim_evidence_refs_by_claim,
+        )
 
     @staticmethod
     def _build_response_schema(
         *,
         claim_refs: dict[str, str],
-        evidence_refs: dict[str, str],
+        claim_evidence_refs: dict[str, list[str]],
     ) -> dict[str, object]:
-        schema = VerificationDraft.model_json_schema()
+        verdicts = [item.value for item in ClaimSupport]
+        verification_properties: dict[str, object] = {}
 
-        definitions = schema.get("$defs")
-        if not isinstance(definitions, dict):
-            raise ResearchVerificationError("Verification schema is missing definitions")
+        for claim_ref in claim_refs:
+            allowed_evidence_refs = claim_evidence_refs.get(claim_ref)
 
-        claim_verification = definitions.get("ClaimVerification")
-        if not isinstance(claim_verification, dict):
-            raise ResearchVerificationError("Verification schema is missing ClaimVerification")
+            if allowed_evidence_refs is None:
+                raise ResearchVerificationError(
+                    f"Verification schema is missing evidence for claim: {claim_ref}"
+                )
 
-        properties = claim_verification.get("properties")
-        if not isinstance(properties, dict):
-            raise ResearchVerificationError(
-                "Verification schema is missing ClaimVerification properties"
-            )
+            verification_properties[claim_ref] = {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "verdict": {
+                        "type": "string",
+                        "enum": verdicts,
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "minimum": 0.0,
+                        "maximum": 1.0,
+                    },
+                    "supporting_evidence_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": allowed_evidence_refs,
+                        },
+                    },
+                    "explanation": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2_000,
+                    },
+                },
+                "required": [
+                    "verdict",
+                    "confidence",
+                    "supporting_evidence_ids",
+                    "explanation",
+                ],
+            }
 
-        claim_id = properties.get("claim_id")
-        supporting_ids = properties.get("supporting_evidence_ids")
+        return {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "verifications": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": verification_properties,
+                    "required": list(claim_refs),
+                }
+            },
+            "required": ["verifications"],
+        }
 
-        if not isinstance(claim_id, dict) or not isinstance(supporting_ids, dict):
-            raise ResearchVerificationError("Verification schema has invalid reference fields")
+    @staticmethod
+    def _parse_response(
+        content: str,
+        *,
+        claim_refs: dict[str, str],
+    ) -> VerificationDraft:
+        try:
+            raw = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ResearchVerificationError("Research verifier returned invalid JSON") from exc
 
-        supporting_items = supporting_ids.get("items")
-        if not isinstance(supporting_items, dict):
-            raise ResearchVerificationError(
-                "Verification schema has invalid supporting evidence items"
-            )
+        if not isinstance(raw, dict) or set(raw) != {"verifications"}:
+            raise ResearchVerificationError("Research verifier returned an invalid draft")
 
-        claim_id["enum"] = list(claim_refs)
-        supporting_items["enum"] = list(evidence_refs)
+        raw_verifications = raw.get("verifications")
 
-        root_properties = schema.get("properties")
-        if not isinstance(root_properties, dict):
-            raise ResearchVerificationError("Verification schema is missing root properties")
+        if not isinstance(raw_verifications, dict):
+            raise ResearchVerificationError("Research verifier returned an invalid draft")
 
-        verifications = root_properties.get("verifications")
-        if not isinstance(verifications, dict):
-            raise ResearchVerificationError(
-                "Verification schema is missing the verifications array"
-            )
+        returned_refs = set(raw_verifications)
+        expected_refs = set(claim_refs)
 
-        expected_count = len(claim_refs)
-        verifications["minItems"] = expected_count
-        verifications["maxItems"] = expected_count
+        unknown_refs = returned_refs - expected_refs
+        if unknown_refs:
+            unknown = ", ".join(sorted(unknown_refs))
+            raise ResearchVerificationError(f"Verifier returned unknown claim_id: {unknown}")
 
-        return schema
+        missing_refs = expected_refs - returned_refs
+        if missing_refs:
+            missing = ", ".join(sorted(missing_refs))
+            raise ResearchVerificationError(f"Verifier omitted claims: {missing}")
+
+        verifications: list[ClaimVerification] = []
+
+        for claim_ref in claim_refs:
+            raw_verification = raw_verifications[claim_ref]
+
+            if not isinstance(raw_verification, dict):
+                raise ResearchVerificationError(
+                    f"Verifier returned an invalid verification for: {claim_ref}"
+                )
+
+            try:
+                verification = ClaimVerification.model_validate(
+                    {
+                        "claim_id": claim_ref,
+                        **raw_verification,
+                    }
+                )
+            except ValidationError as exc:
+                raise ResearchVerificationError(
+                    "Research verifier returned an invalid draft"
+                ) from exc
+
+            verifications.append(verification)
+
+        return VerificationDraft(verifications=verifications)
 
     @staticmethod
     def _resolve_refs(
@@ -284,20 +368,28 @@ class ResearchVerifier:
         *,
         claim_refs: dict[str, str],
         evidence_refs: dict[str, str],
+        claim_evidence_refs: dict[str, list[str]],
     ) -> VerificationDraft:
         resolved: list[ClaimVerification] = []
 
         for verification in draft.verifications:
-            canonical_claim_id = claim_refs.get(verification.claim_id)
+            model_claim_ref = verification.claim_id
+            canonical_claim_id = claim_refs.get(model_claim_ref)
 
             if canonical_claim_id is None:
                 raise ResearchVerificationError(
                     f"Verifier returned unknown claim_id: {verification.claim_id}"
                 )
 
+            allowed_evidence_refs = set(claim_evidence_refs.get(model_claim_ref, []))
             canonical_evidence_ids: list[str] = []
 
             for evidence_ref in verification.supporting_evidence_ids:
+                if evidence_ref not in allowed_evidence_refs:
+                    raise ResearchVerificationError(
+                        f"Verifier referenced evidence not cited by the claim: {evidence_ref}"
+                    )
+
                 canonical_evidence_id = evidence_refs.get(evidence_ref)
 
                 if canonical_evidence_id is None:

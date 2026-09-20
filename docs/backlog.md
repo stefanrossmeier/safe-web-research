@@ -1,0 +1,4 @@
+- independent llm call to inspect content from web and judge it as dangerous (i.e. prompt injection like)
+- further hardeninng with broader evals
+- inspection of cost reporting to call site
+- find out if search is "fast enough"

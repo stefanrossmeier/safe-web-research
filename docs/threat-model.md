@@ -101,7 +101,7 @@ Adding any of those capabilities would require a new threat-model/ADR review rat
 
 **Scenario:** hostile content asks a model to invent evidence/source IDs or cite attacker-selected provenance.
 
-**Controls:** trusted code creates `Source`/`EvidenceChunk`; models only return short references; references are resolved against the exact trusted context; unknown references and extra fields fail closed.
+**Controls:** trusted code creates `Source`/`EvidenceChunk`; models only return short references; verifier output is keyed by the supplied claim references and each claim has a claim-specific evidence enum; references are resolved against the exact trusted context; unknown references, cross-claim evidence, and extra fields fail closed.
 
 ### Unsupported claims with valid citations
 

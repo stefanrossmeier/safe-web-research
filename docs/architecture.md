@@ -169,7 +169,7 @@ The synthesizer cannot create trusted `Source` or `EvidenceChunk` objects.
 
 Reference integrity answers "did this claim cite evidence that exists?" It does not answer "does that evidence actually support the claim?"
 
-`ResearchVerifier` therefore performs a separate structured model call. It receives each claim and only the evidence already cited by that claim. Model-facing identifiers (`Q1`, `E1`, ...) are dynamically constrained by the response schema and are resolved back to canonical IDs by trusted code.
+`ResearchVerifier` therefore performs a separate structured model call. It receives each claim and only the evidence already cited by that claim. The structured response is keyed by model-facing claim references (`Q1`, `Q2`, ...), and each claim key has its own allowed evidence-reference set (`E1`, `E2`, ...). Trusted code resolves those references back to canonical IDs and repeats the citation-subset check after parsing.
 
 Trusted validation requires:
 
