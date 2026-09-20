@@ -22,7 +22,20 @@ class LLMRequest(StrictModel):
     """Provider-neutral request to a language model."""
 
     messages: list[LLMMessage] = Field(min_length=1)
+
     response_schema: dict[str, object] | None = None
+    response_schema_name: str = Field(
+        default="response",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+
+    max_output_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        le=100_000,
+    )
 
 
 class LLMUsage(StrictModel):
@@ -38,4 +51,5 @@ class LLMResponse(StrictModel):
 
     content: str
     model: str = Field(min_length=1)
+
     usage: LLMUsage = Field(default_factory=LLMUsage)
