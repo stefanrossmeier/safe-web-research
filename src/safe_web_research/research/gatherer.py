@@ -24,6 +24,7 @@ from safe_web_research.search import (
     SearchProvider,
     SearchProviderError,
 )
+from safe_web_research.security import SuspiciousContentScanner
 
 
 class EvidenceGatherer:
@@ -36,11 +37,13 @@ class EvidenceGatherer:
         extractor: Extractor,
         *,
         stopping_policy: StoppingPolicy | None = None,
+        content_scanner: SuspiciousContentScanner | None = None,
     ) -> None:
         self._search_provider = search_provider
         self._fetcher = fetcher
         self._extractor = extractor
         self._stopping_policy = stopping_policy or StoppingPolicy()
+        self._content_scanner = content_scanner or SuspiciousContentScanner()
 
     async def gather(
         self,
@@ -194,6 +197,21 @@ class EvidenceGatherer:
                         )
                     )
                     continue
+
+                for chunk in extracted.chunks:
+                    for finding in self._content_scanner.scan(chunk.text):
+                        security_events.append(
+                            SecurityEvent(
+                                event_type=SecurityEventType.SUSPICIOUS_CONTENT,
+                                severity=SecuritySeverity.WARNING,
+                                message=finding.description,
+                                source=url_key,
+                                metadata={
+                                    "rule_id": finding.rule_id,
+                                    "evidence_id": chunk.chunk_id,
+                                },
+                            )
+                        )
 
                 content_hash = extracted.source.content_hash
 
