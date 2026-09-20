@@ -30,5 +30,9 @@ class FetchContentTypeError(FetchError):
     """The fetched resource has a disallowed content type."""
 
 
+class FetchContentEncodingError(FetchError):
+    """The fetched resource uses a disallowed content encoding."""
+
+
 class FetchSizeLimitError(FetchError):
     """The fetched resource exceeded a configured size limit."""

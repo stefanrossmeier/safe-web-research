@@ -10,6 +10,18 @@ class FetchRequest(StrictModel):
 
     url: HttpUrl
 
+    max_bytes: int = Field(
+        default=2_000_000,
+        ge=0,
+        le=50_000_000,
+    )
+
+    max_redirects: int = Field(
+        default=5,
+        ge=0,
+        le=20,
+    )
+
 
 class FetchedDocument(StrictModel):
     """Raw result returned by the bounded fetch layer."""
