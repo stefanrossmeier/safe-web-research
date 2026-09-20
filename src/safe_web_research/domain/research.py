@@ -1,8 +1,9 @@
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from safe_web_research.domain.base import StrictModel
+from safe_web_research.domain.domains import validate_domain
 from safe_web_research.domain.evidence import EvidenceChunk, Source
 from safe_web_research.domain.security import SecurityEvent
 from safe_web_research.domain.usage import ResearchBudget, ResearchUsage
@@ -24,6 +25,11 @@ class ResearchRequest(StrictModel):
 
     language: str | None = Field(default=None, min_length=2, max_length=16)
     country: str | None = Field(default=None, min_length=2, max_length=16)
+
+    @field_validator("allowed_domains", "blocked_domains")
+    @classmethod
+    def validate_domains(cls, values: list[str]) -> list[str]:
+        return [validate_domain(value) for value in values]
 
 
 class ResearchPlan(StrictModel):

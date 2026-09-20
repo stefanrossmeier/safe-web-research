@@ -1,8 +1,9 @@
 from datetime import datetime
 
-from pydantic import Field, HttpUrl
+from pydantic import Field, HttpUrl, field_validator
 
 from safe_web_research.domain.base import StrictModel, utc_now
+from safe_web_research.domain.domains import validate_domain
 
 
 class SearchRequest(StrictModel):
@@ -17,6 +18,11 @@ class SearchRequest(StrictModel):
 
     language: str | None = Field(default=None, min_length=2, max_length=16)
     country: str | None = Field(default=None, min_length=2, max_length=16)
+
+    @field_validator("include_domains", "exclude_domains")
+    @classmethod
+    def validate_domains(cls, values: list[str]) -> list[str]:
+        return [validate_domain(value) for value in values]
 
 
 class SearchResult(StrictModel):
