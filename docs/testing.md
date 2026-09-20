@@ -219,8 +219,24 @@ Credentials and secret values are not written to the report.
 
 Release or benchmark claims should link to a committed timestamped report generated from a clean commit.
 
-## Comparative benchmark roadmap
+## Comparative security benchmark
 
-The regression suite answers whether known invariants still hold. It does not by itself answer how much safer the bounded architecture is than a direct-tool agent.
+The regression suite answers whether known invariants still hold. M14 adds a separate deterministic comparative benchmark that asks what happens **after hostile content has already influenced model behavior**.
 
-That comparison is specified separately in [`benchmarks/README.md`](../benchmarks/README.md). Planned benchmark dimensions include adversarial attack success, forbidden network actions, provenance integrity, semantic citation support, benign task completion, answer quality, cost, token usage, latency, and false-positive security behavior.
+Run it from a clean commit:
+
+```bash
+uv run python -m benchmarks.run_security_benchmark
+```
+
+The same fixed model proposal is evaluated by `safe-web-research`, a minimal direct-tool baseline, and a detector-only baseline. No real provider or network service is called, so the comparison is reproducible and does not conflate authority containment with stochastic prompt-injection resistance.
+
+Development-only runs from a dirty tree require an explicit override:
+
+```bash
+uv run python -m benchmarks.run_security_benchmark --allow-dirty
+```
+
+Timestamped and `latest` Markdown/JSON artifacts are written to `benchmarks/results/`. Commit authoritative results only when the implementation tree was clean at benchmark start.
+
+The containment benchmark measures forbidden action execution and benign control behavior. It does **not** replace live research-quality, semantic-support, cost, or latency evaluation; those remain separate evaluation dimensions. See [`benchmarks/README.md`](../benchmarks/README.md) for the full methodology and limitations.

@@ -172,24 +172,25 @@ For a release, the intent is to commit the timestamped report produced from a cl
 
 ### Comparative security benchmark
 
-The planned benchmark compares this bounded capability against a **direct-tool Internet agent using the same model and equivalent tasks**.
+The repository includes a deterministic **compromised-model containment benchmark** comparing three architectures:
 
-The comparison will measure, among other things:
+1. `safe-web-research` with bounded authority, real URL-policy validation, provenance allow-listing, and no shell/secret/arbitrary-action capability;
+2. a minimal direct-tool baseline that accepts the same fixed model proposal;
+3. a detector-only baseline that uses this repository's heuristic suspicious-content scanner as a blocking gate but otherwise exposes direct authority.
 
-| Metric | Desired direction |
-| --- | --- |
-| Adversarial attack success rate | lower |
-| Forbidden network-action rate | lower |
-| Invalid provenance acceptance | lower |
-| Citation-support failure rate | lower |
-| Benign task completion | higher |
-| Research answer quality | higher |
-| Cost, tokens, latency at comparable quality | lower |
-| False-positive security rate | lower |
+The benchmark intentionally assumes hostile web content has already influenced the model. This isolates the architectural question: **what can a compromised model actually cause the surrounding system to do?** It does not measure the probability that a live model follows a prompt injection.
 
-The methodology is already documented in [`benchmarks/`](benchmarks/README.md). Future per-case and aggregate results will be published in [`benchmarks/results/`](benchmarks/results/README.md).
+Run it without API keys or network access:
 
-**No comparative superiority claim is made before those benchmark results exist.** The benchmark is designed to test the hypothesis that deterministic capability containment reduces attack success relative to giving the model direct Internet authority.
+```bash
+uv run python -m benchmarks.run_security_benchmark
+```
+
+The runner refuses to publish results from a dirty Git tree unless `--allow-dirty` is explicitly supplied for development. It writes timestamped and `latest` JSON/Markdown artifacts under [`benchmarks/results/`](benchmarks/results/README.md).
+
+The containment suite measures attack success, forbidden network execution, secret/shell/action acceptance, invalid provenance acceptance, benign completion, and benign scanner-warning rates. Because model behavior is fixed rather than sampled, provider token usage and cost are zero by construction; live answer quality, semantic support, and research cost remain separate evaluation dimensions.
+
+See [`benchmarks/README.md`](benchmarks/README.md) for methodology, corpus design, interpretation limits, and reproduction instructions. Comparative claims should cite a committed benchmark artifact generated from a clean commit rather than extrapolating beyond the case corpus.
 
 ## Requirements
 
@@ -387,7 +388,7 @@ This project does **not** claim that:
 - LLM outputs are deterministic,
 - the project is production-certified for sensitive deployments.
 
-The design demonstrates bounded authority, provenance control, verification layers, and testable security properties. The comparative benchmark will quantify how those properties perform against a direct-tool baseline.
+The design demonstrates bounded authority, provenance control, verification layers, and testable security properties. The comparative containment benchmark makes those authority-boundary differences reproducible against direct-tool and detector-only baselines.
 
 ## Project layout
 
@@ -406,10 +407,11 @@ tests/
   unit/         deterministic component tests
   integration/  deterministic multi-component tests
   adversarial/  hostile-input security regressions
+  benchmark/    deterministic comparative-benchmark regressions
   live/         opt-in real-service tests
 
 fixtures/adversarial/   hostile external-content fixtures
-benchmarks/             comparative benchmark methodology/results
+benchmarks/             comparative corpus, runners, methodology/results
 reports/test-runs/      reproducible execution statistics
 scripts/                development/reporting utilities
 docs/                   architecture, threat model, testing, CLI, ADRs

@@ -1,58 +1,114 @@
-# Security and research benchmarks
+# Comparative security containment benchmark
 
-The benchmark suite is intended to compare a bounded research capability with a conventional agent that has direct Internet tool access.
+M14 tests the repository's central architectural claim with a reproducible comparison rather than a one-off demo.
 
-**No comparative benchmark result is claimed yet.** This directory defines the methodology first so later results can be reproduced rather than reverse-engineered from a headline number.
+The primary question is deliberately narrow:
 
-## Comparison configurations
+> **If hostile web content has already influenced the model, what authority can the model exercise through the surrounding architecture?**
 
-### A. Bounded capability — `safe-web-research`
+This is different from asking whether a particular model detects or resists prompt injection. The benchmark fixes the model's compromised proposal and feeds the same proposal to every compared architecture. That keeps model behavior constant and isolates capability containment.
 
-The model can propose search queries and structured research output, but trusted code owns search/fetch execution, SSRF policy, redirects, budgets, provenance, and verification.
+## Compared architectures
+
+### A. `safe-web-research`
+
+The bounded configuration models the authority actually available to this project:
+
+- arbitrary model-origin URLs are rejected because the model does not own a generic fetch tool;
+- search-result URLs are checked with the production `URLPolicy`, including hostname/IP/port rules;
+- citations are restricted to evidence IDs already known to trusted code;
+- shell commands, secret reads, and arbitrary extra actions are unavailable;
+- `SuspiciousContentScanner` findings are recorded but do not become an authority boundary.
 
 ### B. Direct-tool baseline
 
-The same model receives direct search/fetch tools and decides when and where to call them. The baseline should use the same provider model, initial task, source corpus, and comparable resource budget wherever possible.
+The direct baseline represents the security-relevant property being compared: a compromised model has direct authority to invoke the proposed network, shell, secret, provenance, or extra action. It is intentionally minimal and is **not** presented as a production agent framework.
 
-### C. Optional detector-only baseline
+### C. Detector-only baseline
 
-A direct-tool agent with prompt-injection detection but without the deterministic authority boundaries used by `safe-web-research`. This separates the effect of detection from capability containment.
+The detector-only baseline uses this repository's heuristic `SuspiciousContentScanner` as a blocking gate in front of the direct-tool baseline. If the scanner finds a suspicious pattern, the proposal is blocked; otherwise it receives direct authority.
 
-## Benchmark families
+This baseline is useful for separating **detection** from **containment**. It is not claimed to represent every prompt-injection detector.
 
-1. **Indirect prompt injection** — pages instruct the agent to ignore policy, invoke tools, reveal secrets, or follow attacker-selected URLs.
-2. **Network boundary attacks** — loopback/private/link-local targets, cloud metadata, mixed DNS answers, redirect SSRF, DNS-rebinding-style cases.
-3. **Provenance attacks** — invented evidence IDs, fake source IDs, citation replacement, action fields smuggled into structured output.
-4. **Semantic citation quality** — real evidence IDs that do not actually support the generated claim.
-5. **Denial-of-wallet/resource pressure** — loops, oversized responses, excessive queries, redirects, and LLM-call amplification.
-6. **Benign control tasks** — ordinary research tasks used to measure whether security controls harm useful completion quality.
+## Case corpus
 
-## Primary metrics
+The version-1 corpus lives in [`cases/security_containment.json`](cases/security_containment.json). It contains both adversarial cases and benign controls across:
 
-| Metric | Direction | Meaning |
-| --- | --- | --- |
-| Attack success rate | lower is better | Fraction of adversarial cases that achieve the forbidden objective. |
-| Forbidden network-action rate | lower is better | Attempts/successes to reach disallowed destinations. |
-| Invalid provenance acceptance | lower is better | Fabricated or out-of-scope evidence accepted into results. |
-| Citation-support failure rate | lower is better | Claims whose cited evidence does not semantically support them. |
-| Benign task completion | higher is better | Successful completion on non-adversarial research tasks. |
-| Research answer quality | higher is better | Task-specific correctness/relevance score. |
-| Cost / tokens / latency | lower is better at equal quality | Operational overhead of each architecture. |
-| False-positive security rate | lower is better | Benign inputs incorrectly blocked or degraded. |
+- network/SSRF boundaries;
+- arbitrary model-origin network retargeting;
+- secret exfiltration;
+- shell/tool execution;
+- provenance manipulation;
+- action smuggling;
+- combined attacks;
+- benign content, including deliberately scanner-confusing documentation text.
 
-## Reproducibility rules
+Cases declare three distinct things:
 
-- Pin the LLM model and provider route where possible.
-- Record code commit and dependency lockfile.
-- Separate deterministic fixture benchmarks from live-web benchmarks.
-- Use the same adversarial payloads and benign tasks across compared architectures.
-- Publish per-case outcomes, not only aggregate percentages.
-- Record token usage, cost, and timing alongside security outcomes.
-- Do not treat heuristic prompt-injection detection as equivalent to attack containment.
+1. the untrusted content the model saw;
+2. the fixed model proposal after that content influenced behavior;
+3. actions that are required for benign completion and actions that are forbidden.
 
-## Result locations
+DNS answers are fixture data. No benchmark case makes a real network request.
 
-- [Recorded test runs](../reports/test-runs/README.md)
-- [Benchmark results](results/README.md)
+## Metrics
 
-Future benchmark artifacts will be committed under `benchmarks/results/` with the exact model, commit, scenario set, and run configuration used.
+The aggregate report includes:
+
+| Metric | Meaning |
+| --- | --- |
+| Attack success rate | Fraction of adversarial cases where at least one explicitly forbidden action was accepted. |
+| Forbidden network execution | Forbidden network targets accepted by the architecture. |
+| Secret exfiltration acceptance | Forbidden secret-read requests accepted. |
+| Shell-action acceptance | Forbidden shell commands accepted. |
+| Invalid provenance acceptance | Unknown/fabricated evidence references accepted. |
+| Action-smuggling acceptance | Arbitrary extra actions accepted. |
+| Benign completion | Benign cases where all required actions remained available. |
+| Benign security-warning rate | Benign cases that triggered the heuristic scanner. |
+
+Runtime is recorded per case, but this benchmark intentionally makes **zero LLM calls**, consumes **zero provider tokens**, and incurs **zero provider cost**. Those values are zero because model behavior is fixed, not because a real research run is free.
+
+## Run it
+
+From a clean repository:
+
+```bash
+uv run python -m benchmarks.run_security_benchmark
+```
+
+The runner writes timestamped and `latest` Markdown/JSON artifacts under [`results/`](results/README.md).
+
+It refuses to write benchmark artifacts from a dirty Git tree. For local development only:
+
+```bash
+uv run python -m benchmarks.run_security_benchmark --allow-dirty
+```
+
+Run the deterministic regression coverage separately with:
+
+```bash
+uv run python scripts/check.py
+```
+
+## Reproducibility and interpretation rules
+
+- Commit the benchmark implementation and case corpus before producing an authoritative result.
+- Preserve per-case outcomes, not only aggregate percentages.
+- Compare the exact same fixed proposal across architectures.
+- Do not add a live LLM to this primary containment benchmark; that would mix model susceptibility with authority containment.
+- Do not describe detector-only results as representative of detector products generally.
+- Do not extrapolate beyond the committed case corpus.
+- Treat heuristic scanner warnings as observability. A warning is not proof of an attack, and no warning is not proof of safety.
+- A zero attack-success rate here means the included compromised proposals could not cross the modeled authority boundary. It is not a proof that every possible attack is contained.
+
+## What this benchmark does not measure
+
+The deterministic M14 suite does not establish:
+
+- the probability that a live model follows prompt injection;
+- general answer correctness or relevance;
+- semantic citation-verifier accuracy on an open-ended corpus;
+- live-web provider latency, token usage, or cost;
+- robustness to every possible browser protocol or future tool capability.
+
+Those are separate research-quality and robustness evaluations. Keeping them separate makes the M14 security claim easier to interpret and reproduce.
