@@ -51,9 +51,9 @@ class EvidenceSelectionPolicy:
 
     max_selected_chars: int = 200_000
     max_chunks_per_source: int = 8
-    min_sources_for_sufficiency: int = 3
-    min_relevant_chunks_for_sufficiency: int = 6
-    target_selected_chars: int = 60_000
+    min_sources_for_sufficiency: int = 2
+    min_relevant_chunks_for_sufficiency: int = 4
+    target_selected_chars: int = 16_000
     min_question_term_coverage: float = 0.5
 
     def __post_init__(self) -> None:

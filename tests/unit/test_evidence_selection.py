@@ -99,3 +99,29 @@ def test_selector_keeps_gathering_when_evidence_is_not_relevant_enough() -> None
     assert not selection.sufficient
     assert selection.relevant_chunks == 0
     assert selection.question_term_coverage < 0.5
+
+
+def test_default_policy_stops_with_compact_relevant_two_source_evidence() -> None:
+    sources = [_source(1), _source(2)]
+    paragraph = (
+        "Python 3.15 changes the default encoding to UTF-8 and documents how "
+        "the previous behavior can be restored. "
+    )
+    evidence = [
+        _chunk(source_index, position, paragraph * 40)
+        for source_index in (1, 2)
+        for position in (0, 1)
+    ]
+
+    selection = EvidenceSelector().select(
+        question="What changed about Python 3.15 default encoding?",
+        queries=["Python 3.15 UTF-8 default encoding"],
+        sources=sources,
+        evidence=evidence,
+    )
+
+    assert len(selection.sources) == 2
+    assert selection.relevant_chunks == 4
+    assert selection.selected_chars >= 16_000
+    assert selection.question_term_coverage >= 0.5
+    assert selection.sufficient
