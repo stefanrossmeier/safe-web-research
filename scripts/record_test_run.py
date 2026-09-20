@@ -66,6 +66,15 @@ def _parse_junit(path: Path) -> dict[str, int | float]:
     }
 
 
+def _public_command(command: list[str]) -> list[str]:
+    public = list(command)
+
+    if public and public[0] == sys.executable:
+        public = ["uv", "run", "python", *public[1:]]
+
+    return [part for part in public if not part.startswith("--junitxml=")]
+
+
 def _git_value(*args: str) -> str | None:
     try:
         completed = subprocess.run(
@@ -295,7 +304,9 @@ def main() -> int:
         "python": platform.python_version(),
         "platform": platform.platform(),
         "openrouter_test_model": os.getenv("OPENROUTER_TEST_MODEL"),
-        "suites": [asdict(suite) for suite in suites],
+        "suites": [
+            {**asdict(suite), "command": _public_command(suite.command)} for suite in suites
+        ],
     }
 
     json_text = json.dumps(report, indent=2, sort_keys=True) + "\n"
