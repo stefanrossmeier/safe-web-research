@@ -4,11 +4,11 @@
 > Source: `https://github.com/stefanrossmeier/safe-web-research` (commit not inspected)  
 > Prompt: `inspect this repo and generate the documentation`
 
-Last Reviewed Scope: full review
+Last Reviewed Scope: delta update
 Doc Status: DRAFT
-Last API Surface Update: 2026-09-20 (exact UTC time unavailable)
-Updated By: agent
-Source Basis: package metadata, CLI, domain models, and quickstart scan; no commands executed
+Last API Surface Update: 2026-09-21 (exact UTC time unavailable)
+Updated By: human+agent
+Source Basis: prior full review plus semantic-judgement code/docs/tests scan; no commands executed
 
 ## Scope
 
@@ -48,7 +48,7 @@ Exit codes: `0` for a synthesized answer, `1` for bounded completion without one
 - `EvidenceGatherer` backed by a `SearchProvider`, `Fetcher`, and `Extractor`;
 - optional `ResearchVerifier` backed by the same or another `LLMProvider`.
 
-The documented production composition uses `OpenRouterLLMProvider`, `BraveSearchProvider`, `SafeFetcher(URLPolicy(SystemDNSResolver()))`, and `WebExtractor`. The package root exports `main`; domain and research modules expose the models/components required for explicit embedding.
+The documented production composition uses `OpenRouterLLMProvider`, `BraveSearchProvider`, `SafeFetcher(URLPolicy(SystemDNSResolver()))`, `WebExtractor`, and a `ContentJudgementObserver` configured with `OpenRouterJevSecurityJudge` in observe mode. The package root exports `main`; domain and research modules expose the models/components required for explicit embedding.
 
 ## Main Models
 
@@ -60,6 +60,8 @@ The documented production composition uses `OpenRouterLLMProvider`, `BraveSearch
 | `SynthesisDraft` | Nonempty answer, one to 100 claims, and up to 50 conflicts |
 | `ResearchResult` | Answer plus claims, sources/evidence, conflicts, verification outcomes, events, usage, and quality flags |
 | `ClaimVerification` | Claim ID, `supported`/`partial`/`unsupported`/`contradicted`, confidence, supporting evidence, and explanation |
+| `ContentJudgementPolicy` | Observe/off mode plus trusted event-threshold, source-call, per-source-character, and concurrency limits |
+| `SecurityAssessment` | Source-scoped content intent, intent distribution, four risk probabilities, truncation state, model, and decision usage |
 
 Models inherit strict validation, so callers should expect unexpected fields and invalid values to fail rather than be silently accepted.
 
@@ -71,14 +73,19 @@ Models inherit strict validation, so callers should expect unexpected fields and
 | `SearchProvider` | `search(SearchRequest) -> list[SearchResult]` | `BraveSearchProvider` |
 | `Fetcher` | `fetch(FetchRequest) -> FetchedDocument` | `SafeFetcher` |
 | `Extractor` | extraction of `FetchedDocument` into canonical source/chunks | `WebExtractor` |
+| `ContentSecurityJudge` | `assess(SecurityJudgementInput) -> SecurityAssessment` | `OpenRouterJevSecurityJudge` |
 
 The OpenRouter adapter accepts plain or JSON-Schema structured requests, requests strict structured output for schema-bearing calls, and validates returned JSON locally. Provider-specific failures are normalized into typed LLM errors.
+
+The Jev adapter sends a source ID, public URL, and bounded selected-evidence sample to OpenRouter Decisions. It validates all required choice/probability answers before producing a provider-neutral assessment. It reports authentication, rate-limit, request, response, configuration, and availability failures as typed content-judgement errors.
 
 ## Result And Error Semantics
 
 - A successful process can still return an empty `answer` with explicit `incomplete_reasons` when budgets, evidence, or synthesis prevent an answer.
 - Human CLI output includes claims, verifier verdict/confidence, sources, conflicts, security events, quality flags, and usage. `--json` serializes the complete result.
 - Security events are telemetry, not a content-safety or authorization verdict.
+- In observe mode, semantic judgement emits `semantic_content_risk`, `content_judgement_error`, or resource-limit events. It never mutates selected evidence or provenance.
+- `ResearchUsage` includes judgement call, token, and cost fields separately from generative LLM usage.
 - Claim references and verifier support references must resolve to trusted context and stay in allowed claim-specific evidence scope.
 
 ## Compatibility And Change Rules
@@ -86,6 +93,7 @@ The OpenRouter adapter accepts plain or JSON-Schema structured requests, request
 - Preserve `api_version: "v1"` semantics when changing request/result models.
 - Treat the CLI option/exit-code set and public domain/research exports as integration-relevant.
 - Provider adapters may change wire handling internally but must preserve normalized protocol contracts.
+- Preserve observe-only semantics unless a separately reviewed authorization/filtering policy is introduced.
 - Verify model/schema, CLI, and provenance behavior with the focused unit and integration tests before changing public contracts.
 
 ## Smoke Checks
