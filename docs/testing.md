@@ -30,7 +30,7 @@ It does not call Brave/OpenRouter.
 
 ### Unit
 
-`tests/unit/` covers individual contracts/components: domain validation, URL/DNS/IP policy, SafeFetcher, gzip handling, extraction, budgets, evidence selection, provider normalization, structured output, planner/synthesizer/verifier behavior, scanner rules, CLI parsing/rendering, and report helpers.
+`tests/unit/` covers individual contracts/components: domain validation, URL/DNS/IP policy, SafeFetcher, gzip handling, extraction, budgets, evidence selection, provider normalization, structured output, planner/synthesizer/verifier behavior, scanner rules, semantic content-judgement sampling/policy/OpenRouter Decisions normalization, default-on/explicit-opt-out CLI configuration, CLI rendering, and report helpers.
 
 ### Integration
 
@@ -62,17 +62,26 @@ Or while debugging only live tests:
 uv run pytest tests/live -m live -v
 ```
 
+To run only the Jev semantic-judgement smoke test and print its full probability/usage output:
+
+```bash
+uv run pytest tests/live/test_jev_content_judgement.py -m live -s -vv
+```
+
+The printed values are diagnostic observations. The test asserts broad semantic separation rather than exact probabilities so provider/model revisions do not turn an observational value into a claimed calibration guarantee.
+
 Required variables:
 
 ```text
 BRAVE_API_KEY=...
 OPENROUTER_API_KEY=...
 OPENROUTER_TEST_MODEL=z-ai/glm-5.3-flash
+OPENROUTER_JEV_TEST_MODEL=typesafe/jev-1.13
 ```
 
 The current low-cost test model is GLM 5.3 Flash, but the live suite is intended to expose model/provider compatibility assumptions rather than hard-code that model into the core.
 
-Live coverage includes Brave Search, real SafeFetcher HTTPS, plain/structured OpenRouter calls, and full `ResearchService` behavior including semantic verification.
+Live coverage includes Brave Search, real SafeFetcher HTTPS, plain/structured OpenRouter calls, the Jev Decisions endpoint, and full `ResearchService` behavior including semantic verification. The Jev smoke test only checks an obvious attack scores above a benign security article that quotes an attack; threshold calibration belongs in a separate benchmark.
 
 ## Real CLI smoke test
 
@@ -168,6 +177,7 @@ Passing tests do not prove:
 - factual correctness of sources/answers;
 - formal semantic entailment;
 - verifier infallibility;
+- semantic content-judgement infallibility or probability calibration;
 - absence of every SSRF/parser edge case;
 - security of the host/deployment environment;
 - availability/security of third-party providers.
@@ -211,3 +221,22 @@ the bounded security metrics, then replaces the committed report artifacts toget
 Because the research-quality benchmark is live, this command calls external providers and may incur
 API charges. Review the generated `reports/*/latest.md` files before committing them as one evidence
 commit.
+
+### Jev 40-case semantic evaluation
+
+For broader live calibration than the two-case smoke test, run:
+
+```bash
+set -a
+source .env
+set +a
+uv run python -m benchmarks.content_judgement --allow-dirty
+```
+
+This evaluates 20 hard benign negatives and 20 operative attacks and writes documentation-ready Markdown/JSON results under `reports/content_judgement/`. The benign set intentionally contains prompt-injection phrases, shell/tool examples, secret names, SSRF URLs, fake role markers, and provenance attacks in non-operative contexts. See `benchmarks/content_judgement/README.md` for methodology and interpretation constraints.
+
+The currently recorded run reports `20 TP / 20 TN / 0 FP / 0 FN` at the descriptive `0.85`
+threshold, with maximum benign risk `0.64`, minimum malicious risk `0.98`, and total Jev cost
+about `$0.00154`. See [`reports/content_judgement/latest.md`](../reports/content_judgement/latest.md).
+This supports the default observe-mode product choice; it remains calibration/regression evidence,
+not proof that the detector is infallible or suitable as an authorization boundary.

@@ -26,6 +26,7 @@ question
        -> SSRF-resistant SafeFetcher
        -> static extraction
        -> deterministic evidence selection / stopping
+       -> Jev semantic judgement (default observe-only)
   -> synthesizer LLM (claims + evidence references)
   -> trusted reference validation
   -> verifier LLM (claim-scoped support verdicts)
@@ -33,9 +34,9 @@ question
 ```
 
 Key controls include DNS/IP validation, validated-address pinning, manual redirect validation,
-bounded gzip decoding, hard resource budgets, provenance checks, strict structured outputs, and
-claim-support verification. Prompt-injection scanning is observability, not the authorization
-boundary.
+bounded gzip decoding, hard resource budgets, provenance checks, strict structured outputs,
+claim-support verification, and default-on semantic content-risk observability with Jev.
+Prompt-injection detection remains defense in depth, not the authorization boundary.
 
 ## When to use it
 
@@ -92,6 +93,7 @@ security events, incomplete/quality flags, and resource usage.
 - SSRF-resistant HTTP(S) fetching with DNS/IP policy and validated-address pinning;
 - bounded identity/gzip response handling and static HTML/text extraction;
 - deterministic evidence selection, source diversity, and early stopping below hard budgets;
+- Jev-based semantic content-risk judgement, enabled by default in observe-only mode;
 - provenance-preserving sources/evidence and claim-scoped semantic verification;
 - deterministic, integration, adversarial, and opt-in live tests;
 - deterministic security and paid live research-quality benchmarks;
@@ -109,6 +111,13 @@ zero accepted forbidden actions for `safe-web-research` across its committed adv
 That is evidence for the committed corpus and benchmark semantics, not proof against all future
 attacks.
 
+The recorded [40-case Jev semantic evaluation](reports/content_judgement/latest.md) contains 20
+hard benign negatives and 20 operative attacks. At the descriptive `0.85` threshold it recorded
+`20 TP / 20 TN / 0 FP / 0 FN`; the highest benign risk was `0.64` and the lowest malicious risk
+was `0.98`. The same corpus caused the deterministic regex scanner to flag 14/20 benign cases
+and 15/20 malicious cases. The complete Jev run cost about `$0.00154`. These are recorded
+evaluation results, not a general security guarantee or authorization policy.
+
 For release evidence, all report families are regenerated from one clean commit with
 `scripts/record_release_evidence.py`; see [Testing and evaluation](docs/testing.md).
 
@@ -117,6 +126,7 @@ For release evidence, all report families are regenerated from one clean commit 
 - [Quickstart](docs/QUICKSTART.md)
 - [Architecture](docs/architecture.md)
 - [Threat model](docs/threat-model.md)
+- [Semantic content judgement](docs/semantic-content-judgement.md)
 - [CLI reference](docs/cli.md)
 - [Testing and evaluation](docs/testing.md)
 - [Repository layout](docs/repository-layout.md)

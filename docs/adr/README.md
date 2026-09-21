@@ -11,6 +11,7 @@ ADRs capture durable choices that materially affect trust boundaries, provider a
 | [0005](0005-semantic-claim-verification.md) | Accepted | Verify claim support separately and map short model-facing references back to trusted IDs. |
 | [0006](0006-resource-budgets-and-evidence-sufficiency.md) | Accepted | Separate hard safety budgets from deterministic soft evidence sufficiency/early stopping. |
 | [0007](0007-bounded-http-content-decoding.md) | Accepted | Decode gzip explicitly with compressed/decompressed bounds and fail closed on ambiguous streams. |
+| [0008](0008-semantic-content-risk-judgement.md) | Accepted | Default the reference composition to bounded semantic risk observability without making detector accuracy an authority boundary. |
 
 ## When to add an ADR
 

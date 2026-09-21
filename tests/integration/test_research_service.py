@@ -12,6 +12,7 @@ from safe_web_research.domain import (
     ResearchBudget,
     ResearchRequest,
     SearchResult,
+    SecurityEventType,
     Source,
 )
 from safe_web_research.extraction import (
@@ -32,12 +33,48 @@ from safe_web_research.research import (
 from safe_web_research.search import (
     FakeSearchProvider,
 )
+from safe_web_research.security import (
+    ContentIntent,
+    ContentJudgementMode,
+    ContentJudgementObserver,
+    ContentJudgementPolicy,
+    DecisionUsage,
+    SecurityAssessment,
+    SecurityJudgementInput,
+)
+
+
+class _HighRiskJudge:
+    async def assess(self, content: SecurityJudgementInput) -> SecurityAssessment:
+        return SecurityAssessment(
+            source_id=content.source_id,
+            source_url=content.source_url,
+            model="fake-jev",
+            content_intent=ContentIntent.OPERATIVE_MODEL_INSTRUCTION,
+            content_intent_probabilities={
+                ContentIntent.ORDINARY: 0.01,
+                ContentIntent.BENIGN_AI_DISCUSSION: 0.01,
+                ContentIntent.OPERATIVE_MODEL_INSTRUCTION: 0.97,
+                ContentIntent.UNCLEAR: 0.01,
+            },
+            instruction_override_probability=0.96,
+            capability_induction_probability=0.20,
+            secret_exfiltration_probability=0.10,
+            provenance_manipulation_probability=0.05,
+            input_truncated=content.truncated,
+            usage=DecisionUsage(
+                input_tokens=250,
+                output_tokens=0,
+                estimated_cost_usd=0.0000105,
+            ),
+        )
 
 
 def _service(
     *,
     llm_responses: list[LLMResponse],
     search_query: str,
+    content_judgement: ContentJudgementObserver | None = None,
 ) -> tuple[
     ResearchService,
     FakeLLMProvider,
@@ -111,6 +148,7 @@ def _service(
         search,
         fetcher,
         extractor,
+        content_judgement=content_judgement,
     )
 
     service = ResearchService(
@@ -219,6 +257,82 @@ async def test_research_service_runs_planner_gatherer_and_synthesizer() -> None:
     assert result.usage.output_tokens == 50
 
     assert result.usage.estimated_cost_usd == pytest.approx(0.003)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_research_service_reports_observe_only_judgement_without_changing_evidence() -> None:
+    planner_response = LLMResponse(
+        content=json.dumps({"queries": ["Python 3.15 encoding changes"]}),
+        model="fake-planner",
+        usage=LLMUsage(
+            input_tokens=20,
+            output_tokens=10,
+            estimated_cost_usd=0.001,
+        ),
+    )
+    synthesis_response = LLMResponse(
+        content=json.dumps(
+            {
+                "answer": "Python 3.15 uses UTF-8 by default.",
+                "claims": [
+                    {
+                        "claim_id": "claim-1",
+                        "text": "Python 3.15 uses UTF-8 by default.",
+                        "evidence_ids": ["evidence-1"],
+                        "confidence": 0.95,
+                    }
+                ],
+                "conflicts": [],
+            }
+        ),
+        model="fake-synth",
+        usage=LLMUsage(
+            input_tokens=100,
+            output_tokens=40,
+            estimated_cost_usd=0.002,
+        ),
+    )
+    observer = ContentJudgementObserver(
+        _HighRiskJudge(),
+        policy=ContentJudgementPolicy(
+            mode=ContentJudgementMode.OBSERVE,
+            event_threshold=0.85,
+        ),
+    )
+    service, _, _, _ = _service(
+        llm_responses=[planner_response, synthesis_response],
+        search_query="Python 3.15 encoding changes",
+        content_judgement=observer,
+    )
+
+    result = await service.research(
+        ResearchRequest(
+            question="What changed in Python 3.15 encoding?",
+            budget=ResearchBudget(
+                max_searches=2,
+                max_pages=2,
+                max_llm_calls=2,
+                max_input_tokens=10_000,
+                max_output_tokens=2_000,
+            ),
+        )
+    )
+
+    assert [chunk.chunk_id for chunk in result.evidence] == ["evidence-1"]
+    assert result.evidence[0].text == "Python 3.15 uses UTF-8 by default."
+    semantic_events = [
+        event
+        for event in result.security_events
+        if event.event_type is SecurityEventType.SEMANTIC_CONTENT_RISK
+    ]
+    assert len(semantic_events) == 1
+    assert semantic_events[0].metadata["semantic_risk"] == pytest.approx(0.97)
+    assert result.usage.judgement_calls == 1
+    assert result.usage.judgement_input_tokens == 250
+    assert result.usage.judgement_output_tokens == 0
+    assert result.usage.judgement_cost_usd == pytest.approx(0.0000105)
+    assert result.usage.estimated_cost_usd == pytest.approx(0.0030105)
 
 
 @pytest.mark.integration

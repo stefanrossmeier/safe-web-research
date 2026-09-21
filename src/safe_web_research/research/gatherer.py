@@ -26,6 +26,7 @@ from safe_web_research.search import (
     SearchProviderError,
 )
 from safe_web_research.security import SuspiciousContentScanner
+from safe_web_research.security.judgement import ContentJudgementObserver
 
 
 class EvidenceGatherer:
@@ -40,6 +41,7 @@ class EvidenceGatherer:
         stopping_policy: StoppingPolicy | None = None,
         evidence_selector: EvidenceSelector | None = None,
         content_scanner: SuspiciousContentScanner | None = None,
+        content_judgement: ContentJudgementObserver | None = None,
     ) -> None:
         self._search_provider = search_provider
         self._fetcher = fetcher
@@ -47,6 +49,7 @@ class EvidenceGatherer:
         self._stopping_policy = stopping_policy or StoppingPolicy()
         self._evidence_selector = evidence_selector or EvidenceSelector()
         self._content_scanner = content_scanner or SuspiciousContentScanner()
+        self._content_judgement = content_judgement or ContentJudgementObserver()
 
     async def gather(
         self,
@@ -262,12 +265,28 @@ class EvidenceGatherer:
             evidence=evidence,
         )
 
+        judgement_report = await self._content_judgement.observe(
+            selection.sources,
+            selection.evidence,
+        )
+        security_events.extend(judgement_report.events)
+
+        usage = tracker.usage().model_copy(
+            update={
+                "judgement_calls": judgement_report.calls_attempted,
+                "judgement_input_tokens": judgement_report.usage.input_tokens,
+                "judgement_output_tokens": judgement_report.usage.output_tokens,
+                "judgement_cost_usd": judgement_report.usage.estimated_cost_usd,
+                "estimated_cost_usd": judgement_report.usage.estimated_cost_usd,
+            }
+        )
+
         return EvidenceBundle(
             queries=issued_queries,
             sources=list(selection.sources),
             evidence=list(selection.evidence),
             security_events=security_events,
-            usage=tracker.usage(),
+            usage=usage,
             incomplete_reasons=incomplete_reasons,
         )
 

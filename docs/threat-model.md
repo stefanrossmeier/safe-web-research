@@ -61,9 +61,9 @@ Adding any of those capabilities would require a new threat-model/ADR review rat
 - canonical claim/evidence identity remains in trusted code;
 - unexpected action/provenance fields fail validation.
 
-**Defense in depth:** static extraction removes common non-content elements and the heuristic scanner emits suspicious-content events.
+**Defense in depth:** static extraction removes common non-content elements, the heuristic scanner emits suspicious-content events, and default-on Jev observe mode emits independent semantic risk telemetry over selected evidence in the reference application.
 
-**Residual risk:** hostile evidence can still influence wording, source choice, and factual quality. Scanner misses do not weaken the authority boundary.
+**Residual risk:** hostile evidence can still influence wording, source choice, and factual quality. Scanner/Jev misses do not weaken the authority boundary, and false positives do not remove evidence in observe mode.
 
 ### Tool abuse / excessive agency
 
@@ -121,9 +121,9 @@ Adding any of those capabilities would require a new threat-model/ADR review rat
 
 ### Malformed/adversarial provider responses
 
-**Scenario:** a provider returns invalid JSON, unexpected fields, truncated structured output, unsupported parameters, or malformed data.
+**Scenario:** a provider returns invalid JSON, unexpected fields, truncated structured output, unsupported parameters, malformed data, or incorrect semantic-risk probabilities.
 
-**Controls:** provider-specific wire handling, normalized internal models, JSON Schema for structured output, local Pydantic validation, typed provider errors, and trusted identifier resolution.
+**Controls:** provider-specific wire handling, normalized internal models, JSON Schema for structured output, local Pydantic validation, typed provider errors, trusted identifier resolution, and isolation of Jev behind a separate `ContentSecurityJudge` adapter. Jev output remains observability data rather than authorization.
 
 ### Misinformation / source manipulation
 
@@ -141,7 +141,7 @@ Adding any of those capabilities would require a new threat-model/ADR review rat
 
 ## Security-event semantics
 
-`SecurityEvent` is observability, not a verdict system. In particular, `SUSPICIOUS_CONTENT` means a heuristic rule matched. It neither proves an attack nor establishes that unflagged content is benign.
+`SecurityEvent` is observability, not a verdict system. In particular, `SUSPICIOUS_CONTENT` means a heuristic rule matched and `SEMANTIC_CONTENT_RISK` means the configured semantic-risk event threshold was exceeded. Neither proves an attack, and absence of either event does not establish that content is benign.
 
 ## Security regression evidence
 

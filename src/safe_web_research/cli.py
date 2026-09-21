@@ -27,9 +27,19 @@ from safe_web_research.research import (
     ResearchVerifier,
 )
 from safe_web_research.search import BraveSearchProvider
+from safe_web_research.security import (
+    ContentJudgementMode,
+    ContentJudgementObserver,
+    ContentJudgementPolicy,
+)
+from safe_web_research.security.openrouter_jev import (
+    DEFAULT_JEV_MODEL,
+    OpenRouterJevSecurityJudge,
+)
 
 _DEFAULT_MODEL = "openai/gpt-5-mini"
 _DEFAULT_BUDGET = ResearchBudget()
+_DEFAULT_CONTENT_JUDGEMENT_MODE = ContentJudgementMode.OBSERVE
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -104,6 +114,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     research.add_argument(
+        "--content-judgement",
+        type=ContentJudgementMode,
+        choices=list(ContentJudgementMode),
+        default=os.getenv(
+            "SAFE_WEB_RESEARCH_CONTENT_JUDGEMENT",
+            _DEFAULT_CONTENT_JUDGEMENT_MODE.value,
+        ),
+        help=(
+            "Semantic risk judgement for selected evidence. Defaults to 'observe'; "
+            "'off' opts out. Observe mode emits telemetry but never filters evidence."
+        ),
+    )
+    research.add_argument(
+        "--jev-model",
+        default=os.getenv("OPENROUTER_JEV_MODEL", DEFAULT_JEV_MODEL),
+        help=f"Pinned OpenRouter Jev model. Defaults to {DEFAULT_JEV_MODEL}.",
+    )
+
+    research.add_argument(
         "--no-verify",
         action="store_true",
         help="Skip the semantic claim-support verification pass.",
@@ -170,11 +199,23 @@ def _build_service(
     openrouter_api_key: str,
     model: str,
     verify: bool,
+    content_judgement_mode: ContentJudgementMode = _DEFAULT_CONTENT_JUDGEMENT_MODE,
+    jev_model: str = DEFAULT_JEV_MODEL,
 ) -> ResearchService:
     llm = OpenRouterLLMProvider(
         openrouter_api_key,
         model=model,
     )
+
+    content_judgement = ContentJudgementObserver()
+    if content_judgement_mode is ContentJudgementMode.OBSERVE:
+        content_judgement = ContentJudgementObserver(
+            OpenRouterJevSecurityJudge(
+                openrouter_api_key,
+                model=jev_model,
+            ),
+            policy=ContentJudgementPolicy(mode=ContentJudgementMode.OBSERVE),
+        )
 
     verifier = ResearchVerifier(llm) if verify else None
 
@@ -184,6 +225,7 @@ def _build_service(
             BraveSearchProvider(brave_api_key),
             SafeFetcher(URLPolicy(SystemDNSResolver())),
             WebExtractor(),
+            content_judgement=content_judgement,
         ),
         ResearchSynthesizer(llm),
         verifier,
@@ -289,6 +331,10 @@ def _render_human(
             f"LLM calls: {usage.llm_calls}",
             f"input tokens: {usage.input_tokens}",
             f"output tokens: {usage.output_tokens}",
+            f"content judgement calls: {usage.judgement_calls}",
+            f"content judgement input tokens: {usage.judgement_input_tokens}",
+            f"content judgement output tokens: {usage.judgement_output_tokens}",
+            f"content judgement cost USD: {usage.judgement_cost_usd:.6f}",
             f"estimated cost USD: {usage.estimated_cost_usd:.6f}",
         ]
     )
@@ -346,6 +392,8 @@ async def _run_research(
         openrouter_api_key=openrouter_api_key,
         model=args.model,
         verify=not args.no_verify,
+        content_judgement_mode=args.content_judgement,
+        jev_model=args.jev_model,
     )
 
     return await service.research(request)

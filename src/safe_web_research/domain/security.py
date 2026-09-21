@@ -19,6 +19,8 @@ class SecurityEventType(StrEnum):
     REDIRECT_BLOCKED = "redirect_blocked"
     RESOURCE_LIMIT = "resource_limit"
     SUSPICIOUS_CONTENT = "suspicious_content"
+    SEMANTIC_CONTENT_RISK = "semantic_content_risk"
+    CONTENT_JUDGEMENT_ERROR = "content_judgement_error"
     PROVIDER_ERROR = "provider_error"
     POLICY_VIOLATION = "policy_violation"
     FETCH_ERROR = "fetch_error"

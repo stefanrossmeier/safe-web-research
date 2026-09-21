@@ -10,6 +10,7 @@ from safe_web_research.domain import (
     ResearchResult,
     ResearchUsage,
 )
+from safe_web_research.security import ContentJudgementMode
 
 
 class _FakeService:
@@ -54,7 +55,11 @@ def _result() -> ResearchResult:
             llm_calls=3,
             input_tokens=100,
             output_tokens=50,
-            estimated_cost_usd=0.001,
+            judgement_calls=2,
+            judgement_input_tokens=500,
+            judgement_output_tokens=0,
+            judgement_cost_usd=0.000021,
+            estimated_cost_usd=0.001021,
         ),
     )
 
@@ -95,6 +100,113 @@ def test_parser_uses_generic_research_budget_defaults() -> None:
     assert args.max_output_tokens == 50_000
 
 
+def test_parser_defaults_semantic_content_judgement_to_observe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(
+        "SAFE_WEB_RESEARCH_CONTENT_JUDGEMENT",
+        raising=False,
+    )
+    monkeypatch.delenv(
+        "OPENROUTER_JEV_MODEL",
+        raising=False,
+    )
+    args = cli.build_parser().parse_args(
+        [
+            "research",
+            "question",
+        ]
+    )
+
+    assert args.content_judgement is ContentJudgementMode.OBSERVE
+    assert args.jev_model == "typesafe/jev-1.13"
+
+
+def test_parser_accepts_off_mode_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "SAFE_WEB_RESEARCH_CONTENT_JUDGEMENT",
+        "off",
+    )
+    args = cli.build_parser().parse_args(
+        [
+            "research",
+            "question",
+        ]
+    )
+
+    assert args.content_judgement is ContentJudgementMode.OFF
+
+
+def test_parser_flag_can_opt_out_of_environment_observe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "SAFE_WEB_RESEARCH_CONTENT_JUDGEMENT",
+        "observe",
+    )
+    args = cli.build_parser().parse_args(
+        [
+            "research",
+            "question",
+            "--content-judgement",
+            "off",
+        ]
+    )
+
+    assert args.content_judgement is ContentJudgementMode.OFF
+
+
+def test_service_builder_defaults_to_observe_mode() -> None:
+    service = cli._build_service(
+        brave_api_key="brave-test",
+        openrouter_api_key="openrouter-test",
+        model="test/model",
+        verify=False,
+    )
+
+    observer = service._gatherer._content_judgement
+    assert observer._policy.mode is ContentJudgementMode.OBSERVE
+    assert observer._judge is not None
+
+
+def test_service_builder_explicit_off_disables_judge() -> None:
+    service = cli._build_service(
+        brave_api_key="brave-test",
+        openrouter_api_key="openrouter-test",
+        model="test/model",
+        verify=False,
+        content_judgement_mode=ContentJudgementMode.OFF,
+    )
+
+    observer = service._gatherer._content_judgement
+    assert observer._policy.mode is ContentJudgementMode.OFF
+    assert observer._judge is None
+
+
+def test_parser_accepts_observe_mode_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "SAFE_WEB_RESEARCH_CONTENT_JUDGEMENT",
+        "observe",
+    )
+    monkeypatch.setenv(
+        "OPENROUTER_JEV_MODEL",
+        "typesafe/jev-1.13",
+    )
+    args = cli.build_parser().parse_args(
+        [
+            "research",
+            "question",
+        ]
+    )
+
+    assert args.content_judgement is ContentJudgementMode.OBSERVE
+    assert args.jev_model == "typesafe/jev-1.13"
+
+
 def test_human_renderer_surfaces_verification_and_usage() -> None:
     rendered = cli._render_human(_result())
 
@@ -102,6 +214,8 @@ def test_human_renderer_surfaces_verification_and_usage() -> None:
     assert "[supported (0.98)]" in rendered
     assert "evidence-1" in rendered
     assert "LLM calls: 3" in rendered
+    assert "content judgement calls: 2" in rendered
+    assert "content judgement cost USD: 0.000021" in rendered
 
 
 def test_cli_json_output_runs_bounded_service(

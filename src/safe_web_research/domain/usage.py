@@ -41,4 +41,9 @@ class ResearchUsage(StrictModel):
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
 
+    judgement_calls: int = Field(default=0, ge=0)
+    judgement_input_tokens: int = Field(default=0, ge=0)
+    judgement_output_tokens: int = Field(default=0, ge=0)
+    judgement_cost_usd: float = Field(default=0.0, ge=0)
+
     estimated_cost_usd: float = Field(default=0.0, ge=0)

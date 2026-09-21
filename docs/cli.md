@@ -11,13 +11,24 @@ BRAVE_API_KEY
 OPENROUTER_API_KEY
 ```
 
-Optional model override:
+Optional runtime configuration:
 
 ```text
 OPENROUTER_MODEL
+SAFE_WEB_RESEARCH_CONTENT_JUDGEMENT
+OPENROUTER_JEV_MODEL
 ```
 
 If unset, the current runtime default is `openai/gpt-5-mini`. The configured OpenRouter model must support the structured-output requests used by planning/synthesis/verification.
+
+Semantic content judgement defaults to `observe`, so the independent Jev risk judgement runs over
+selected evidence during normal CLI research. Observe mode emits telemetry and usage only; it never
+filters or trusts evidence. Set `SAFE_WEB_RESEARCH_CONTENT_JUDGEMENT=off` or pass
+`--content-judgement off` to opt out.
+
+The Jev model is pinned to `typesafe/jev-1.13` by default and can be overridden explicitly with
+`OPENROUTER_JEV_MODEL` or `--jev-model`. Concrete model versions are recommended for reproducible
+evaluation.
 
 API keys are intentionally not accepted as CLI flags, reducing accidental disclosure through shell history/process listings.
 
@@ -60,6 +71,16 @@ uv run safe-web-research research \
   "What changed in Python 3.15?" \
   --no-verify
 ```
+
+Semantic content-risk observability is already enabled by default. Opt out explicitly:
+
+```bash
+uv run safe-web-research research \
+  "What changed in Python 3.15?" \
+  --content-judgement off
+```
+
+See [Semantic Content Judgement](semantic-content-judgement.md) for the trust model and failure behavior.
 
 ## Budgets
 
@@ -113,7 +134,7 @@ Human-readable output includes:
 - conflicts;
 - security events;
 - incompleteness/quality flags;
-- resource/token/cost usage.
+- resource/token/cost usage, including semantic-judgement calls/tokens/cost separately.
 
 Use `--json` for programmatic consumers.
 

@@ -22,3 +22,5 @@ then replaces the public report artifacts together.
 
 Timestamped artifacts identify the concrete run; `latest.*` is a convenience copy of that same run.
 Older pre-release report artifacts are intentionally not retained in the public tree.
+
+- `content_judgement/`: live Jev semantic content-risk evaluation reports generated from the paired 40-case corpus.

@@ -34,6 +34,7 @@ EvidenceGatherer
       +-- WebExtractor (static HTML/text)
       +-- SuspiciousContentScanner (observability only)
       +-- EvidenceSelector (deterministic relevance/diversity)
+      +-- ContentJudgementObserver (default-on semantic observability in reference composition)
       |
       v
 EvidenceBundle
@@ -126,6 +127,36 @@ A scanner finding becomes a security event. It does **not** remove evidence, aut
 
 See [ADR 0004](adr/0004-indirect-prompt-injection-containment.md).
 
+### Semantic content judgement
+
+Semantic content judgement is a second observability layer over the evidence already selected for
+synthesis and is enabled by default in the CLI/reference composition. The reference adapter uses
+TypeSafe Jev through OpenRouter's Decisions API
+and asks several narrow typed questions about instruction override, external-capability induction,
+secret exfiltration, provenance manipulation, and whether AI-directed text is operative or merely
+quoted/discussed.
+
+The provider-neutral `ContentSecurityJudge` interface is separate from `LLMProvider`: a decision
+model and a generative model have different contracts. Trusted Python combines Jev probabilities
+into a deterministic `semantic_risk` signal.
+
+The policy has only `off` and `observe` modes. The reference composition defaults to `observe`;
+`off` is an explicit application-level opt-out. Observe mode:
+
+- groups selected chunks by source;
+- bounds each source input deterministically and samples both head and tail when truncation is
+  necessary;
+- caps calls and concurrency independently from caller-controlled `ResearchRequest`;
+- emits `semantic_content_risk` only above the configured event threshold;
+- converts provider failures to `content_judgement_error` and leaves evidence unchanged.
+
+A low-risk result does not establish that content is safe, and a high-risk result does not remove
+evidence in observe mode. SSRF, provenance, resource, and model-tool boundaries remain unchanged
+even if Jev is wrong or unavailable. The existing heuristic scanner remains active.
+
+See [Semantic Content Judgement](semantic-content-judgement.md) and
+[ADR 0008](adr/0008-semantic-content-risk-judgement.md).
+
 ### Evidence gathering and selection
 
 `EvidenceGatherer` is trusted orchestration code. It owns:
@@ -207,6 +238,11 @@ See [ADR 0002](adr/0002-provider-abstractions.md).
 | cumulative output tokens | 50,000 |
 
 Fetch attempts and successful pages are separate so blocked/failed responses do not consume the successful-page budget.
+
+Semantic content judgement has a separate trusted policy (`max_calls`, per-source character bound,
+concurrency, and event threshold). These controls are not accepted from `ResearchRequest`; the
+reference application enables observe mode by default and permits an explicit application-level
+opt-out.
 
 Input-token usage is accounted from provider responses, so exact pre-enforcement is limited without a provider/model-specific tokenizer. The system therefore uses trusted cumulative accounting plus bounded per-call behavior and explicit incompleteness/quality flags.
 

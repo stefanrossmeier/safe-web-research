@@ -297,7 +297,11 @@ class ResearchService:
             llm_calls=llm_usage.llm_calls,
             input_tokens=llm_usage.input_tokens,
             output_tokens=llm_usage.output_tokens,
-            estimated_cost_usd=llm_usage.estimated_cost_usd,
+            judgement_calls=evidence_usage.judgement_calls,
+            judgement_input_tokens=evidence_usage.judgement_input_tokens,
+            judgement_output_tokens=evidence_usage.judgement_output_tokens,
+            judgement_cost_usd=evidence_usage.judgement_cost_usd,
+            estimated_cost_usd=(evidence_usage.estimated_cost_usd + llm_usage.estimated_cost_usd),
         )
 
     @staticmethod

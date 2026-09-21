@@ -24,7 +24,10 @@ Edit `.env` locally. A practical low-cost configuration is:
 BRAVE_API_KEY=...
 OPENROUTER_API_KEY=...
 OPENROUTER_MODEL=z-ai/glm-5.3-flash
+SAFE_WEB_RESEARCH_CONTENT_JUDGEMENT=observe
+OPENROUTER_JEV_MODEL=typesafe/jev-1.13
 OPENROUTER_TEST_MODEL=z-ai/glm-5.3-flash
+OPENROUTER_JEV_TEST_MODEL=typesafe/jev-1.13
 ```
 
 The project is not tied to that model. The provider boundary is designed for compatible OpenRouter models that support the structured-output contract used here.
@@ -76,6 +79,23 @@ uv run safe-web-research research \
 ```
 
 Semantic claim verification is enabled by default. `--no-verify` skips the final verification call when you explicitly want the cheaper planner/gatherer/synthesizer path.
+
+Semantic content-risk judgement runs by default in independent Jev `observe` mode. It records
+typed semantic risk signals and separate decision-model usage/cost without making low-risk content
+trusted or removing high-risk content. No extra flag is required for the normal command above.
+
+Opt out explicitly when you do not want the additional decision-model calls:
+
+```bash
+uv run safe-web-research research \
+  "What changed in Python 3.15?" \
+  --domain python.org \
+  --content-judgement off
+```
+
+You can also set `SAFE_WEB_RESEARCH_CONTENT_JUDGEMENT=off`. Existing `.env` files created from an
+older example may still contain `off`; remove that override or change it to `observe` to receive
+the new default. See [Semantic Content Judgement](semantic-content-judgement.md).
 
 See [CLI reference](cli.md) for all filters and budget options.
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Enable Jev semantic content judgement by default in observe-only mode, with explicit `off`
+  opt-out.
+- Add and document the 40-case semantic content-judgement evaluation corpus and recorded
+  results.
+
 ## 0.1.0 — 2026-09-20
 
 Initial public release of safe-web-research.

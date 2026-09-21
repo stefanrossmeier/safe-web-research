@@ -30,11 +30,13 @@ safe-web-research research QUESTION [options]
 | `--freshness-days N` | Restrict discovery to approximately the last N days |
 | `--language CODE` / `--country CODE` | Search localization filters |
 | `--model SLUG` | OpenRouter model; defaults to `OPENROUTER_MODEL` or `openai/gpt-5-mini` |
+| `--content-judgement observe|off` | Jev semantic observability; defaults to `observe`, use `off` to opt out |
+| `--jev-model SLUG` | Jev Decisions model; defaults to `OPENROUTER_JEV_MODEL` or `typesafe/jev-1.13` |
 | `--no-verify` | Skip semantic claim-support verification |
 | `--json` | Emit complete `ResearchResult` as JSON |
 | `--max-*` | Override hard ceilings for searches, fetches, pages, bytes, redirects, LLM calls, and tokens |
 
-Required environment variables for real research are `BRAVE_API_KEY` and `OPENROUTER_API_KEY`. `OPENROUTER_MODEL` is optional. Credentials are intentionally not command-line options.
+Required environment variables for real research are `BRAVE_API_KEY` and `OPENROUTER_API_KEY`. `OPENROUTER_MODEL`, `SAFE_WEB_RESEARCH_CONTENT_JUDGEMENT`, and `OPENROUTER_JEV_MODEL` are optional. Semantic content judgement defaults to `observe`; set it to `off` to opt out. Credentials are intentionally not command-line options.
 
 Exit codes: `0` for a synthesized answer, `1` for bounded completion without one, `2` for configuration/validation/research error, and `130` for interruption.
 
