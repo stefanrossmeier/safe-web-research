@@ -96,7 +96,8 @@ security events, incomplete/quality flags, and resource usage.
 - Jev-based semantic content-risk judgement, enabled by default in observe-only mode;
 - provenance-preserving sources/evidence and claim-scoped semantic verification;
 - deterministic, integration, adversarial, and opt-in live tests;
-- deterministic security and paid live research-quality benchmarks;
+- deterministic security plus paid live research-quality and agent-usage benchmarks;
+- a local tool-using research-agent example that exposes safe-web-research as its only web authority;
 - a standalone CLI and Python API.
 
 This is a **pre-1.0 reference implementation**, not an audited security product. It does not claim

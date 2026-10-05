@@ -37,7 +37,7 @@ from safe_web_research.security.openrouter_jev import (
     OpenRouterJevSecurityJudge,
 )
 
-_DEFAULT_MODEL = "openai/gpt-5-mini"
+_DEFAULT_MODEL = "openai/gpt-6-luna"
 _DEFAULT_BUDGET = ResearchBudget()
 _DEFAULT_CONTENT_JUDGEMENT_MODE = ContentJudgementMode.OBSERVE
 

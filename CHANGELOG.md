@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Make `openai/gpt-6-luna` the default runtime/example-agent model after local agent-usage measurements showed materially lower latency and tracked cost than the previous GPT-5 Mini/GLM experiments.
+- Preserve claim-to-source URL provenance in the example research agent so comparative answers can cite multiple independently supporting sources instead of losing source diversity during outer-agent finalization.
 - Enable Jev semantic content judgement by default in observe-only mode, with explicit `off`
   opt-out.
 - Add and document the 40-case semantic content-judgement evaluation corpus and recorded

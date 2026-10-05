@@ -23,10 +23,10 @@ Edit `.env` locally. A practical low-cost configuration is:
 ```text
 BRAVE_API_KEY=...
 OPENROUTER_API_KEY=...
-OPENROUTER_MODEL=z-ai/glm-5.3-flash
+OPENROUTER_MODEL=openai/gpt-6-luna
 SAFE_WEB_RESEARCH_CONTENT_JUDGEMENT=observe
 OPENROUTER_JEV_MODEL=typesafe/jev-1.13
-OPENROUTER_TEST_MODEL=z-ai/glm-5.3-flash
+OPENROUTER_TEST_MODEL=openai/gpt-6-luna
 OPENROUTER_JEV_TEST_MODEL=typesafe/jev-1.13
 ```
 
@@ -162,7 +162,7 @@ from safe_web_research.search import BraveSearchProvider
 async def main() -> None:
     llm = OpenRouterLLMProvider(
         os.environ["OPENROUTER_API_KEY"],
-        model=os.getenv("OPENROUTER_MODEL", "openai/gpt-5-mini"),
+        model=os.getenv("OPENROUTER_MODEL", "openai/gpt-6-luna"),
     )
 
     service = ResearchService(

@@ -41,3 +41,6 @@ coverage.xml
 
 # Release evidence staging
 .release-evidence-tmp/
+
+# zip
+*.zip

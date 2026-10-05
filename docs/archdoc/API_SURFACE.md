@@ -29,7 +29,7 @@ safe-web-research research QUESTION [options]
 | `--block-domain DOMAIN` | Repeatable exclusion from search discovery |
 | `--freshness-days N` | Restrict discovery to approximately the last N days |
 | `--language CODE` / `--country CODE` | Search localization filters |
-| `--model SLUG` | OpenRouter model; defaults to `OPENROUTER_MODEL` or `openai/gpt-5-mini` |
+| `--model SLUG` | OpenRouter model; defaults to `OPENROUTER_MODEL` or `openai/gpt-6-luna` |
 | `--content-judgement observe|off` | Jev semantic observability; defaults to `observe`, use `off` to opt out |
 | `--jev-model SLUG` | Jev Decisions model; defaults to `OPENROUTER_JEV_MODEL` or `typesafe/jev-1.13` |
 | `--no-verify` | Skip semantic claim-support verification |

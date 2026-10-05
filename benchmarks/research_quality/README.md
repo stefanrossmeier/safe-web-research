@@ -28,14 +28,14 @@ source .env
 set +a
 
 uv run python -m benchmarks.research_quality \
-  --model z-ai/glm-5.3-flash
+  --model openai/gpt-6-luna
 ```
 
 Development-only dirty run:
 
 ```bash
 uv run python -m benchmarks.research_quality \
-  --model z-ai/glm-5.3-flash \
+  --model openai/gpt-6-luna \
   --allow-dirty
 ```
 

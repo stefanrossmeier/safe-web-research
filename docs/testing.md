@@ -75,11 +75,11 @@ Required variables:
 ```text
 BRAVE_API_KEY=...
 OPENROUTER_API_KEY=...
-OPENROUTER_TEST_MODEL=z-ai/glm-5.3-flash
+OPENROUTER_TEST_MODEL=openai/gpt-6-luna
 OPENROUTER_JEV_TEST_MODEL=typesafe/jev-1.13
 ```
 
-The current low-cost test model is GLM 5.3 Flash, but the live suite is intended to expose model/provider compatibility assumptions rather than hard-code that model into the core.
+The current default live-test model is GPT-6 Luna. The live suite is intended to expose model/provider compatibility assumptions rather than make model portability depend on one provider/model.
 
 Live coverage includes Brave Search, real SafeFetcher HTTPS, plain/structured OpenRouter calls, the Jev Decisions endpoint, and full `ResearchService` behavior including semantic verification. The Jev smoke test only checks an obvious attack scores above a benign security article that quotes an attack; threshold calibration belongs in a separate benchmark.
 
@@ -129,7 +129,7 @@ source .env
 set +a
 
 uv run python -m benchmarks.research_quality \
-  --model z-ai/glm-5.3-flash
+  --model openai/gpt-6-luna
 ```
 
 It records expected-term coverage, verified claim counts, support verdicts, hard-limit flags, pages/fetches, tokens, provider cost, and wall time.
@@ -139,6 +139,23 @@ It is live/stochastic and is **not** a general model ranking. A case passes only
 Generated artifacts go to `reports/research_quality/`.
 
 See [research-quality benchmark methodology](../benchmarks/research_quality/README.md).
+
+## Live agent-usage benchmark
+
+The live benchmark under `benchmarks/agent_usage/` exercises safe-web-research as the only web
+capability exposed to a small outer research agent. It measures routing/profile selection, Brave
+searches, fetches, nested research-model stages, Jev calls, citation preservation, end-to-end
+latency, and tracked provider cost. The current default for both the outer agent and inner research
+model is `openai/gpt-6-luna`; `OPENROUTER_AGENT_MODEL` and `OPENROUTER_MODEL` remain explicit
+overrides.
+
+```bash
+uv run python -m benchmarks.agent_usage --allow-dirty
+```
+
+Generated local artifacts go to `reports/agent_usage/local/` and are ignored by Git. These runs are
+exploratory integration/performance evidence rather than release evidence. See
+[agent-usage benchmark methodology](../benchmarks/agent_usage/README.md).
 
 ## Recorded test-run evidence
 
@@ -210,7 +227,7 @@ source .env
 set +a
 
 uv run python scripts/record_release_evidence.py \
-  --model z-ai/glm-5.3-flash
+  --model openai/gpt-6-luna
 ```
 
 This command runs the live test report, deterministic security benchmark, and live research-quality

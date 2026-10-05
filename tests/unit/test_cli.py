@@ -82,6 +82,15 @@ def test_parser_accepts_repeatable_domains() -> None:
     ]
 
 
+def test_parser_defaults_to_gpt_6_luna(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENROUTER_MODEL", raising=False)
+    args = cli.build_parser().parse_args(["research", "question"])
+
+    assert args.model == "openai/gpt-6-luna"
+
+
 def test_parser_uses_generic_research_budget_defaults() -> None:
     args = cli.build_parser().parse_args(
         [

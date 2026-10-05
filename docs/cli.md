@@ -19,7 +19,7 @@ SAFE_WEB_RESEARCH_CONTENT_JUDGEMENT
 OPENROUTER_JEV_MODEL
 ```
 
-If unset, the current runtime default is `openai/gpt-5-mini`. The configured OpenRouter model must support the structured-output requests used by planning/synthesis/verification.
+If unset, the current runtime default is `openai/gpt-6-luna`. The configured OpenRouter model must support the structured-output requests used by planning/synthesis/verification.
 
 Semantic content judgement defaults to `observe`, so the independent Jev risk judgement runs over
 selected evidence during normal CLI research. Observe mode emits telemetry and usage only; it never

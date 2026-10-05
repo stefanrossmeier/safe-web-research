@@ -1,0 +1,60 @@
+{
+  "version": "1",
+  "cases": [
+    {
+      "case_id": "official-python-taskgroup",
+      "category": "official-source-routing",
+      "task": "Using only official Python documentation on python.org, explain what asyncio.TaskGroup does when a child task fails with a non-cancellation exception. Cite the source URL.",
+      "expected_capabilities": ["official_sources"],
+      "expected_terms": ["TaskGroup", "ExceptionGroup"],
+      "min_tool_calls": 1,
+      "min_search_requests": 1,
+      "min_sources": 1,
+      "min_cited_sources": 1
+    },
+    {
+      "case_id": "recent-python-315",
+      "category": "freshness-routing",
+      "task": "Research recent public-web information from the last 30 days about Python 3.15. Summarize the most relevant release or ecosystem developments and cite source URLs.",
+      "expected_capabilities": ["recent_web"],
+      "expected_terms": ["Python 3.15"],
+      "min_tool_calls": 1,
+      "min_search_requests": 1,
+      "min_sources": 1,
+      "min_cited_sources": 1
+    },
+    {
+      "case_id": "regional-german-phishing",
+      "category": "regional-routing",
+      "task": "Research German-language web guidance for people in Germany about phishing. Summarize practical recommendations and cite source URLs.",
+      "expected_capabilities": ["regional_web"],
+      "expected_terms": ["Phishing"],
+      "min_tool_calls": 1,
+      "min_search_requests": 1,
+      "min_sources": 1,
+      "min_cited_sources": 1
+    },
+    {
+      "case_id": "open-web-ssrf",
+      "category": "open-web-routing",
+      "task": "Use the general public web without restricting to a named domain. Compare at least two independent explanations of SSRF defenses and summarize the common recommendations with citations.",
+      "expected_capabilities": ["open_web"],
+      "expected_terms": ["SSRF"],
+      "min_tool_calls": 1,
+      "min_search_requests": 1,
+      "min_sources": 2,
+      "min_cited_sources": 2
+    },
+    {
+      "case_id": "official-plus-recent",
+      "category": "multi-capability-agent-loop",
+      "task": "Compare Python 3.15 information in two evidence scopes: first anchor the facts using only python.org official documentation, then separately research public-web commentary from the last 30 days. Keep the two evidence scopes distinct and cite URLs from both.",
+      "expected_capabilities": ["official_sources", "recent_web"],
+      "expected_terms": ["Python 3.15"],
+      "min_tool_calls": 2,
+      "min_search_requests": 2,
+      "min_sources": 2,
+      "min_cited_sources": 2
+    }
+  ]
+}
