@@ -82,16 +82,14 @@ now records such failures as per-case `ERROR` results and continues with the rem
 
 `openai/gpt-6-luna` is the current default for both the outer agent and the inner research stack.
 This choice is based on local exploratory agent-usage runs, not committed release evidence. On
-2026-10-05, a dirty-tree five-case compact-profile run completed in **155.63s** with **$0.020698**
-of tracked OpenRouter/Jev cost and passed 4/5 cases. The only failure was `open-web-ssrf` on
-`citation_count`: research returned enough sources, but the outer final answer cited fewer than the
-two independent sources explicitly required by the task. The agent now preserves claim-to-source
-URLs from trusted evidence references and instructs the finalizer to keep multi-source citation
-diversity. Rerun the suite after this change before treating 5/5 as measured evidence.
+2026-10-05, a dirty-tree five-case compact-profile run after the citation-provenance fix completed
+in **160.23s** with **$0.020440** of tracked OpenRouter/Jev cost and passed **5/5 cases** with no
+search-provider errors. It issued six Brave searches across the suite.
 
-The same exploratory run spent 103.88s inside safe-web-research, of which 89.21s was inner research
-LLM time; Brave Search accounted for 7.29s and safe page fetching for 4.30s. This is why model
-latency remains a first-class benchmark dimension even when web-provider latency is low.
+The exploratory run spent 105.93s inside safe-web-research, of which 92.25s was inner research LLM
+time; Brave Search accounted for 5.90s and safe page fetching for 4.21s. This is why model latency
+remains a first-class benchmark dimension even when web-provider latency is low. These measurements
+are live/stochastic and should not be read as a performance guarantee or committed release evidence.
 
 The compact profile is an example-integration setting, not a change to the package defaults. It uses
 a 30k-character selected-evidence ceiling, 2.5k-character extraction chunks, a 30k-character
